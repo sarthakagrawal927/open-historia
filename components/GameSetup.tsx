@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Province } from "@/lib/types";
+import { encryptKey, decryptKey } from "@/lib/crypto";
 
 interface GameSetupProps {
   provinces: Province[];
@@ -47,9 +48,25 @@ export default function GameSetup({ provinces, onStartGame }: GameSetupProps) {
   const [scenario, setScenario] = useState("The global order is shifting. New alliances are forming...");
   const [playerNationId, setPlayerNationId] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [rememberKey, setRememberKey] = useState(false);
   const [provider, setProvider] = useState<Provider>("google");
   const [model, setModel] = useState(MODELS["google"][0].id);
   const [difficulty, setDifficulty] = useState<GameConfig["difficulty"]>("Realistic");
+
+  // Load key from storage
+  useEffect(() => {
+    const saved = localStorage.getItem(`oh_key_${provider}`);
+    if (saved) {
+      const decrypted = decryptKey(saved);
+      if (decrypted) {
+        setApiKey(decrypted);
+        setRememberKey(true);
+      }
+    } else {
+        setApiKey("");
+        setRememberKey(false);
+    }
+  }, [provider]);
 
   // Update model when provider changes
   const handleProviderChange = (newProvider: Provider) => {
@@ -77,6 +94,13 @@ export default function GameSetup({ provinces, onStartGame }: GameSetupProps) {
         alert("Please select a nation and provide an API Key.");
         return;
     }
+
+    if (rememberKey) {
+        localStorage.setItem(`oh_key_${provider}`, encryptKey(apiKey));
+    } else {
+        localStorage.removeItem(`oh_key_${provider}`);
+    }
+
     onStartGame({ year, scenario, playerNationId, apiKey, provider, model, difficulty });
   };
 
@@ -134,7 +158,18 @@ export default function GameSetup({ provinces, onStartGame }: GameSetupProps) {
                         className="w-full bg-slate-950 border border-slate-600 rounded p-2 text-slate-100 focus:border-amber-500 outline-none"
                         placeholder={`Enter your ${getProviderName(provider)} API Key`}
                     />
-                    <p className="text-xs text-slate-500 mt-1">Keys are stored in memory only.</p>
+                    <div className="flex items-center justify-between mt-2">
+                        <p className="text-xs text-slate-500">Keys are stored in memory only unless saved.</p>
+                        <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-400 hover:text-slate-300">
+                            <input 
+                                type="checkbox" 
+                                checked={rememberKey}
+                                onChange={e => setRememberKey(e.target.checked)}
+                                className="accent-amber-600 bg-slate-900 border-slate-600 rounded focus:ring-amber-500"
+                            />
+                            Remember Key (Encrypted)
+                        </label>
+                    </div>
                 </div>
             </div>
 
