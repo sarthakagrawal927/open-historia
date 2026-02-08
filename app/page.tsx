@@ -1,65 +1,227 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import MapCanvas from "@/components/MapCanvas";
+import Sidebar from "@/components/Sidebar";
+import CommandTerminal from "@/components/CommandTerminal";
+import GameSetup, { GameConfig } from "@/components/GameSetup";
+import { loadWorldData } from "@/lib/world-loader";
+import { INITIAL_PLAYERS } from "@/lib/map-generator";
+import { Province, GameState } from "@/lib/types";
+
+interface LogEntry {
+  id: string;
+  type: "command" | "info" | "error" | "success";
+  text: string;
+}
+
+export default function GamePage() {
+  const [gameConfig, setGameConfig] = useState<GameConfig | null>(null);
+  const [gameState, setGameState] = useState<GameState | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [processingTurn, setProcessingTurn] = useState(false);
+  const [provincesCache, setProvincesCache] = useState<Province[]>([]);
+  
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const logCounter = useRef(0);
+
+  // Load Map Data Once on Mount
+  useEffect(() => {
+    async function load() {
+        const data = await loadWorldData();
+        setProvincesCache(data);
+        setLoading(false);
+    }
+    load();
+  }, []);
+
+  const addLog = (text: string, type: LogEntry["type"] = "info") => {
+    logCounter.current += 1;
+    setLogs((prev) => [...prev, { id: `log-${Date.now()}-${logCounter.current}`, type, text }]);
+  };
+
+  const handleStartGame = (config: GameConfig) => {
+    setGameConfig(config);
+    
+    // Initialize State
+    const initialPlayers = { ...INITIAL_PLAYERS };
+    
+    // Update Player Name to selected nation if possible, or keep custom
+    const nation = provincesCache.find(p => p.id === config.playerNationId);
+    if (nation) {
+        initialPlayers["player"].name = nation.name;
+        // Also give them ownership of that nation
+        const newProvinces = provincesCache.map(p => 
+            p.id === config.playerNationId ? { ...p, ownerId: "player" } : p
+        );
+        setProvincesCache(newProvinces); // Update local cache for game start
+        
+        setGameState({
+            turn: config.year,
+            players: initialPlayers,
+            provinces: newProvinces,
+            selectedProvinceId: null,
+        });
+    } else {
+        // Fallback
+        setGameState({
+            turn: config.year,
+            players: initialPlayers,
+            provinces: provincesCache,
+            selectedProvinceId: null,
+        });
+    }
+
+    setLogs([
+        { id: "init-1", type: "info", text: `Welcome to Open Historia.` },
+        { id: "init-2", type: "info", text: `Scenario: ${config.scenario}` },
+        { id: "init-3", type: "info", text: "The AI Game Master is listening..." },
+    ]);
+  };
+
+  const handleSelectProvince = useCallback((provinceId: string | number | null) => {
+    setGameState((prev) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (!prev) return null;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return { ...prev, selectedProvinceId: provinceId as any };
+    });
+  }, []);
+
+  const processCommand = async (cmd: string) => {
+    if (!gameState || !gameConfig || processingTurn) return;
+
+    addLog(cmd, "command");
+    setProcessingTurn(true);
+
+    try {
+        // Prepare simplified state for AI (avoid circular refs and massive payload)
+        const simplifiedState = {
+            turn: gameState.turn,
+            players: gameState.players,
+            // Send simplified province list (just owners)
+            provinces: gameState.provinces
+                .filter(p => p.ownerId !== null)
+                .map(p => ({ name: p.name, ownerId: p.ownerId }))
+        };
+
+        const res = await fetch("/api/turn", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                command: cmd,
+                gameState: simplifiedState,
+                config: gameConfig,
+                history: logs.slice(-5) // Send last few logs for context
+            })
+        });
+
+        const data = await res.json();
+
+        if (data.message) {
+            addLog(data.message, "info");
+        }
+
+        if (data.updates) {
+            // Apply Updates
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            data.updates.forEach((update: any) => {
+                if (update.type === "owner") {
+                    // Find province by name (AI returns name)
+                    // Fuzzy match?
+                    setGameState(prev => {
+                        if (!prev) return null;
+                        const target = prev.provinces.find(p => p.name.toLowerCase() === update.provinceName.toLowerCase());
+                        if (target) {
+                             const newProvinces = prev.provinces.map(p => 
+                                p.id === target.id ? { ...p, ownerId: update.newOwnerId } : p
+                             );
+                             return { ...prev, provinces: newProvinces };
+                        }
+                        return prev;
+                    });
+                }
+                if (update.type === "gold") {
+                     setGameState(prev => {
+                        if (!prev) return null;
+                        const p = prev.players["player"];
+                        return { 
+                            ...prev, 
+                            players: { ...prev.players, player: { ...p, gold: p.gold + update.amount } } 
+                        };
+                     });
+                }
+            });
+        }
+
+    } catch (err) {
+        console.error(err);
+        addLog("Communication with HQ lost (Network Error).", "error");
+    } finally {
+        setProcessingTurn(false);
+    }
+  };
+
+  if (loading) return (
+    <div className="flex items-center justify-center h-screen bg-slate-950 text-slate-400 font-mono">
+        <div className="animate-pulse">Loading Satellite Data...</div>
     </div>
+  );
+
+  if (!gameConfig) {
+      return <GameSetup provinces={provincesCache} onStartGame={handleStartGame} />;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const selectedProvince = gameState?.selectedProvinceId !== null 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ? gameState?.provinces.find(p => p.id === (gameState.selectedProvinceId as any)) || null 
+    : null;
+
+  return (
+    <main className="relative w-screen h-screen overflow-hidden bg-slate-900 text-slate-100">
+      {gameState && (
+          <MapCanvas 
+            provinces={gameState.provinces}
+            players={gameState.players}
+            onSelectProvince={handleSelectProvince}
+            selectedProvinceId={gameState.selectedProvinceId}
+          />
+      )}
+      
+      <Sidebar 
+        province={selectedProvince}
+        owner={selectedProvince?.ownerId && gameState ? gameState.players[selectedProvince.ownerId] : undefined}
+      />
+
+      <CommandTerminal 
+        logs={logs}
+        onCommand={processCommand}
+      />
+      
+      {/* Processing Indicator */}
+      {processingTurn && (
+          <div className="absolute bottom-20 left-4 text-xs text-amber-500 animate-pulse font-mono">
+              [AI Strategizing...]
+          </div>
+      )}
+
+      {gameState && (
+        <div className="absolute top-0 left-0 w-full p-2 bg-gradient-to-b from-slate-950 to-transparent pointer-events-none flex justify-center gap-8 text-slate-200 font-mono text-lg z-10">
+            <div>
+                <span className="text-slate-500 text-sm uppercase mr-2">Year</span>
+                <span className="font-bold">{gameState.turn}</span>
+            </div>
+            <div>
+                <span className="text-amber-500 text-sm uppercase mr-2">Budget</span>
+                <span className="font-bold text-amber-400">${gameState.players["player"].gold}B</span>
+            </div>
+            <div>
+                <span className="text-blue-400 text-sm uppercase mr-2">Leader</span>
+                <span className="font-bold">{gameState.players["player"].name}</span>
+            </div>
+        </div>
+      )}
+    </main>
   );
 }
