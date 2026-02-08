@@ -26,18 +26,18 @@ const MODELS: Record<Provider, { id: string; name: string }[]> = {
     { id: "deepseek-chat", name: "DeepSeek V3 (Fast)" },
   ],
   google: [
-    { id: "gemini-2.0-pro-exp-02-05", name: "Gemini 2.0 Pro (Newest)" },
-    { id: "gemini-2.0-flash-thinking-exp-01-21", name: "Gemini 2.0 Flash Thinking" },
+    { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash" },
     { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro (Stable)" },
+    { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash (Fast)" },
   ],
   openai: [
-    { id: "o1", name: "o1 (High Reasoning)" },
-    { id: "o3-mini", name: "o3-mini (Fast Reasoning)" },
+    { id: "o1-preview", name: "o1 Preview (Reasoning)" },
+    { id: "o1-mini", name: "o1 Mini (Fast Reasoning)" },
     { id: "gpt-4o", name: "GPT-4o (Standard)" },
   ],
   anthropic: [
-    { id: "claude-3-5-sonnet-latest", name: "Claude 3.5 Sonnet (Verified)" },
-    { id: "claude-3-5-haiku-latest", name: "Claude 3.5 Haiku" },
+    { id: "claude-3-5-sonnet-20240620", name: "Claude 3.5 Sonnet" },
+    { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku" },
   ],
 };
 

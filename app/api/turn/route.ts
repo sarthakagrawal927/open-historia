@@ -47,55 +47,52 @@ export async function POST(req: NextRequest) {
 
     let responseText = "";
 
-    // --- GOOGLE GEMINI ---
-    if (config.provider === "google") {
-      const genAI = new GoogleGenerativeAI(config.apiKey);
-      const model = genAI.getGenerativeModel({ model: config.model });
-      
-      const result = await model.generateContent(systemPrompt);
-      responseText = result.response.text();
-    } 
-    
-    // --- DEEPSEEK ---
-    else if (config.provider === "deepseek") {
-       const deepseek = new OpenAI({
-        apiKey: config.apiKey,
-        baseURL: "https://api.deepseek.com", 
-      });
-
-      const completion = await deepseek.chat.completions.create({
-        messages: [{ role: "system", content: systemPrompt }],
-        model: config.model, 
-      });
-      responseText = completion.choices[0].message.content || "{}";
-    }
-
-    // --- OPENAI ---
-    else if (config.provider === "openai") {
-      const openai = new OpenAI({ apiKey: config.apiKey });
-      const isOSeries = config.model.startsWith('o');
-      
-      const completion = await openai.chat.completions.create({
-        messages: [{ role: isOSeries ? "user" : "system", content: systemPrompt }],
-        model: config.model,
-        response_format: config.model.includes('gpt-4o') || config.model.includes('o3') ? { type: "json_object" } : undefined,
-      });
-      responseText = completion.choices[0].message.content || "{}";
-    }
-
-    // --- ANTHROPIC ---
-    else if (config.provider === "anthropic") {
-      const anthropic = new Anthropic({ apiKey: config.apiKey });
-      const message = await anthropic.messages.create({
-        model: config.model,
-        max_tokens: 2048,
-        system: "You are a JSON-only response bot for a strategy game. Never explain your answer, only return JSON.",
-        messages: [{ role: "user", content: systemPrompt }],
-      });
-      
-      if (message.content[0].type === 'text') {
-           responseText = message.content[0].text;
+    switch (config.provider) {
+      case "google": {
+        const genAI = new GoogleGenerativeAI(config.apiKey);
+        const model = genAI.getGenerativeModel({ model: config.model });
+        const result = await model.generateContent(systemPrompt);
+        responseText = result.response.text();
+        break;
       }
+      case "deepseek": {
+        const deepseek = new OpenAI({
+          apiKey: config.apiKey,
+          baseURL: "https://api.deepseek.com",
+        });
+        const completion = await deepseek.chat.completions.create({
+          messages: [{ role: "system", content: systemPrompt }],
+          model: config.model,
+        });
+        responseText = completion.choices[0].message.content || "{}";
+        break;
+      }
+      case "openai": {
+        const openai = new OpenAI({ apiKey: config.apiKey });
+        const isOSeries = config.model.startsWith('o');
+        const completion = await openai.chat.completions.create({
+          messages: [{ role: isOSeries ? "user" : "system", content: systemPrompt }],
+          model: config.model,
+          response_format: config.model.includes('gpt-4o') || config.model.includes('o3') ? { type: "json_object" } : undefined,
+        });
+        responseText = completion.choices[0].message.content || "{}";
+        break;
+      }
+      case "anthropic": {
+        const anthropic = new Anthropic({ apiKey: config.apiKey });
+        const message = await anthropic.messages.create({
+          model: config.model,
+          max_tokens: 2048,
+          system: "You are a JSON-only response bot for a strategy game. Never explain your answer, only return JSON.",
+          messages: [{ role: "user", content: systemPrompt }],
+        });
+        if (message.content[0].type === 'text') {
+             responseText = message.content[0].text;
+        }
+        break;
+      }
+      default:
+        throw new Error(`Unsupported provider: ${config.provider}`);
     }
 
     // Robust JSON cleaning
