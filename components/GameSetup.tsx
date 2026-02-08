@@ -55,6 +55,10 @@ export default function GameSetup({ provinces, onStartGame }: GameSetupProps) {
     setModel(MODELS[newProvider][0].id);
   };
 
+  const majorNations = provinces
+    .filter(p => p.name !== "Antarctica" && !p.name.startsWith("Region"))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   const getProviderName = (p: Provider) => {
     switch (p) {
       case "google": return "Gemini";
