@@ -26,9 +26,9 @@ const MODELS: Record<Provider, { id: string; name: string }[]> = {
     { id: "deepseek-chat", name: "DeepSeek V3 (Fast)" },
   ],
   google: [
-    { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash" },
-    { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro (Stable)" },
-    { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash (Fast)" },
+    { id: "gemini-2.0-flash-exp", name: "Gemini 2.0 Flash (Exp)" },
+    { id: "gemini-1.5-pro-001", name: "Gemini 1.5 Pro (Stable)" },
+    { id: "gemini-1.5-flash-001", name: "Gemini 1.5 Flash (Fast)" },
   ],
   openai: [
     { id: "o1-preview", name: "o1 Preview (Reasoning)" },
