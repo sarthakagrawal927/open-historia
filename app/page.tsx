@@ -25,6 +25,10 @@ export default function GamePage() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const logCounter = useRef(0);
 
+  // Time Skip State
+  const [timeStep, setTimeStep] = useState("1m");
+  const [customTime, setCustomTime] = useState("");
+
   useEffect(() => {
     async function load() {
         const data = await loadWorldData();
@@ -105,7 +109,8 @@ export default function GamePage() {
   };
 
   const handleNextTurn = () => {
-      processCommand("Wait / Advance Time (Next Turn)");
+      const period = timeStep === "custom" ? customTime : timeStep;
+      processCommand(`Wait / Advance Time by ${period || "1 month"}`);
   };
 
   const processCommand = async (cmd: string) => {
@@ -230,13 +235,35 @@ export default function GamePage() {
                     <span className="font-bold">{gameState.players["player"].name}</span>
                 </div>
                 <div className="w-px h-6 bg-slate-700"></div>
-                <button 
-                    onClick={handleNextTurn}
-                    disabled={processingTurn}
-                    className="bg-amber-700 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-bold px-3 py-1 rounded transition-colors uppercase"
-                >
-                    Advance Time
-                </button>
+                <div className="flex items-center gap-2 pointer-events-auto">
+                    <select 
+                        value={timeStep}
+                        onChange={(e) => setTimeStep(e.target.value)}
+                        className="bg-slate-800 text-white text-xs border border-slate-700 rounded px-2 py-1 outline-none"
+                    >
+                        <option value="5d">5 Days</option>
+                        <option value="1m">1 Month</option>
+                        <option value="6m">6 Months</option>
+                        <option value="1y">1 Year</option>
+                        <option value="custom">Custom...</option>
+                    </select>
+                    {timeStep === "custom" && (
+                        <input 
+                            type="text"
+                            value={customTime}
+                            onChange={(e) => setCustomTime(e.target.value)}
+                            placeholder="e.g. 2 years"
+                            className="bg-slate-800 text-white text-xs border border-slate-700 rounded px-2 py-1 w-20 outline-none"
+                        />
+                    )}
+                    <button 
+                        onClick={handleNextTurn}
+                        disabled={processingTurn}
+                        className="bg-amber-700 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-bold px-3 py-1 rounded transition-colors uppercase"
+                    >
+                        Advance
+                    </button>
+                </div>
             </div>
         </div>
       )}

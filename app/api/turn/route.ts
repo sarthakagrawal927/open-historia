@@ -25,8 +25,9 @@ export async function POST(req: NextRequest) {
       **Instructions:**
       1. **ROLEPLAY:** If the command is diplomatic, reply AS the target nation's leader.
          - Consider the difficulty: In "Hardcore", nations are suspicious and aggressive. In "Sandbox", they are compliant.
-      2. **TIME:** If the command is "Wait" or "Advance Time", describe what happens in the world over the next few months/year.
-         - Update the "time" state by +1.
+      2. **TIME:** If the command is "Wait" or "Advance Time by [Period]", describe what happens in the world over that specific duration.
+         - Update the "time" state by a relative amount (e.g., if period is 1 year, amount is 1. If 1 month, amount is 0.08).
+         - Mention the new date/year clearly in your narrative.
       3. **REALISM:**
          - Actions take time. You can say "Construction started, it will finish next year."
          - No gold budget. Resources are abstract. If a player does too much at once, say their bureaucracy is overwhelmed.
