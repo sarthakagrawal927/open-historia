@@ -7,7 +7,7 @@ import CommandTerminal from "@/components/CommandTerminal";
 import GameSetup, { GameConfig } from "@/components/GameSetup";
 import { loadWorldData } from "@/lib/world-loader";
 import { INITIAL_PLAYERS } from "@/lib/map-generator";
-import { Province, GameState } from "@/lib/types";
+import { Province, GameState, MapTheme } from "@/lib/types";
 
 interface LogEntry {
   id: string;
@@ -43,6 +43,17 @@ export default function GamePage() {
   const handleStartGame = (config: GameConfig) => {
     setGameConfig(config);
     
+    // Determine Theme based on Scenario
+    let theme: MapTheme = "classic";
+    const s = config.scenario.toLowerCase();
+    if (s.includes("cyber") || s.includes("future") || s.includes("robot") || s.includes("neon")) {
+        theme = "cyberpunk";
+    } else if (s.includes("rome") || s.includes("ancient") || s.includes("medieval") || s.includes("king") || s.includes("empire")) {
+        theme = "parchment";
+    } else if (s.includes("cold war") || s.includes("plan") || s.includes("blueprint") || s.includes("modern")) {
+        theme = "blueprint";
+    }
+
     // Initialize State
     const initialPlayers = { ...INITIAL_PLAYERS };
     
@@ -61,6 +72,7 @@ export default function GamePage() {
             players: initialPlayers,
             provinces: newProvinces,
             selectedProvinceId: null,
+            theme,
         });
     } else {
         // Fallback
@@ -69,13 +81,15 @@ export default function GamePage() {
             players: initialPlayers,
             provinces: provincesCache,
             selectedProvinceId: null,
+            theme,
         });
     }
 
     setLogs([
         { id: "init-1", type: "info", text: `Welcome to Open Historia.` },
         { id: "init-2", type: "info", text: `Scenario: ${config.scenario}` },
-        { id: "init-3", type: "info", text: "The AI Game Master is listening..." },
+        { id: "init-3", type: "info", text: `Visual Theme: ${theme.toUpperCase()}` },
+        { id: "init-4", type: "info", text: "The AI Game Master is listening..." },
     ]);
   };
 
@@ -186,6 +200,7 @@ export default function GamePage() {
             players={gameState.players}
             onSelectProvince={handleSelectProvince}
             selectedProvinceId={gameState.selectedProvinceId}
+            theme={gameState.theme}
           />
       )}
       

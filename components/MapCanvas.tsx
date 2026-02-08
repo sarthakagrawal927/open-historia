@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useEffect, useState, useMemo } from "react";
-import { Province, Player } from "@/lib/types";
+import { Province, Player, MapTheme } from "@/lib/types";
 import * as d3 from "d3-geo";
 
 interface MapCanvasProps {
@@ -9,13 +9,22 @@ interface MapCanvasProps {
   players: Record<string, Player>;
   onSelectProvince: (provinceId: string | number | null) => void;
   selectedProvinceId: string | number | null;
+  theme?: MapTheme;
 }
+
+const THEME_STYLES: Record<MapTheme, { sea: string; border: string; borderRef: string; highlight: string; bg: string }> = {
+  classic: { sea: "#1e293b", border: "#0f172a", borderRef: "#ffffff", highlight: "#64748b", bg: "#1e293b" },
+  cyberpunk: { sea: "#050505", border: "#00ffcc", borderRef: "#ff00ff", highlight: "rgba(0, 255, 204, 0.4)", bg: "#000000" },
+  parchment: { sea: "#d4c5a9", border: "#5c4033", borderRef: "#8b4513", highlight: "rgba(92, 64, 51, 0.3)", bg: "#e6dcc8" },
+  blueprint: { sea: "#003366", border: "#ffffff", borderRef: "#ffff00", highlight: "rgba(255, 255, 255, 0.2)", bg: "#002244" },
+};
 
 export default function MapCanvas({
   provinces,
   players,
   onSelectProvince,
   selectedProvinceId,
+  theme = "classic",
 }: MapCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
@@ -87,10 +96,12 @@ export default function MapCanvas({
     pathGenerator.context(ctx);
 
     const render = () => {
+      const style = THEME_STYLES[theme];
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       
       // Sea
-      ctx.fillStyle = "#1e293b"; 
+      ctx.fillStyle = style.sea; 
       ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr);
 
       ctx.save();
@@ -122,13 +133,13 @@ export default function MapCanvas({
         }
         
         if (province.id === selectedProvinceId) {
-             ctx.fillStyle = "#64748b"; // Highlight color
+             ctx.fillStyle = style.highlight; 
         }
         
         ctx.fill();
 
         ctx.lineWidth = 0.5 / camera.k;
-        ctx.strokeStyle = "#0f172a";
+        ctx.strokeStyle = style.border;
         ctx.stroke();
       });
 
@@ -138,7 +149,7 @@ export default function MapCanvas({
               ctx.beginPath();
               pathGenerator(selected.feature);
               ctx.lineWidth = 1.5 / camera.k;
-              ctx.strokeStyle = "#ffffff";
+              ctx.strokeStyle = style.borderRef;
               ctx.stroke();
           }
       }
@@ -147,7 +158,7 @@ export default function MapCanvas({
     };
 
     render();
-  }, [provinces, players, camera, selectedProvinceId, pathGenerator]);
+  }, [provinces, players, camera, selectedProvinceId, pathGenerator, theme]);
 
   // Mouse Handlers (Pan & Click)
   const handleMouseDown = (e: React.MouseEvent) => {
