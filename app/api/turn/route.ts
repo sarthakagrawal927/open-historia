@@ -14,96 +14,94 @@ export async function POST(req: NextRequest) {
     const systemPrompt = `
       You are the Game Master for a grand strategy game called "Open Historia".
       
-      **Scenario Context:** ${config.scenario}
-      **Year:** ${gameState.turn} (Started: ${config.year})
-      **Player Nation:** ${gameState.players["player"].name}
-      
-      **Current World State (Simplified):**
-      - Player Gold: ${gameState.players["player"].gold}
-      - Player Territories: ${gameState.provinces.filter((p: any) => p.ownerId === "player").map((p: any) => p.name).join(", ") || "None"}
+      **Game Context:**
+      - **Scenario:** ${config.scenario}
+      - **Year:** ${gameState.turn}
+      - **Player Nation:** ${gameState.players["player"].name}
+      - **Difficulty:** ${config.difficulty}
       
       **Player Command:** "${command}"
       
       **Instructions:**
-      1. Interpret the player's command.
-      2. **DIPLOMACY:** If the command is a "Diplomatic Message to [Country]", you must reply AS that country's government/leader.
-         - Be realistic. If the player is weak, be dismissive. If strong, be respectful or fearful.
-         - Consider the "Scenario Context" (e.g., if it's Cold War, USSR will be hostile to USA).
-      3. **ACTIONS:** If the player wants to attack/claim/trade, determine the outcome based on realism.
-         - Attacking a strong nation without preparation should fail.
-         - Buying a country (claiming) is only possible for small/neutral/destabilized regions or with HUGE gold sums.
-      4. **UPDATES:** Return state updates if territories change hands or resources are spent.
+      1. **ROLEPLAY:** If the command is diplomatic, reply AS the target nation's leader.
+         - Consider the difficulty: In "Hardcore", nations are suspicious and aggressive. In "Sandbox", they are compliant.
+      2. **TIME:** If the command is "Wait" or "Advance Time", describe what happens in the world over the next few months/year.
+         - Update the "time" state by +1.
+      3. **REALISM:**
+         - Actions take time. You can say "Construction started, it will finish next year."
+         - No gold budget. Resources are abstract. If a player does too much at once, say their bureaucracy is overwhelmed.
       
       **Response Format (JSON ONLY):**
       {
-        "message": "The narrative response (e.g., 'The French President responds: ...' or 'Your troops advanced...')",
+        "message": "Narrative response...",
         "updates": [
-           { "type": "owner", "provinceName": "Name of province", "newOwnerId": "player" },
-           { "type": "gold", "amount": -10 }
+           { "type": "owner", "provinceName": "Exact Name", "newOwnerId": "player" },
+           { "type": "time", "amount": 1 } 
         ]
       }
       
       IMPORTANT:
       - Return ONLY the raw JSON object. No markdown.
+      - "updates" array is optional, only use if map/time changes.
     `;
 
     let responseText = "";
 
-    switch (config.provider) {
-      case "google": {
-        const genAI = new GoogleGenerativeAI(config.apiKey);
-        const model = genAI.getGenerativeModel({ model: config.model });
-        const result = await model.generateContent(systemPrompt);
-        responseText = result.response.text();
-        break;
-      }
-      case "deepseek": {
-        const deepseek = new OpenAI({
-          apiKey: config.apiKey,
-          baseURL: "https://api.deepseek.com",
-        });
-        const completion = await deepseek.chat.completions.create({
-          messages: [{ role: "system", content: systemPrompt }],
-          model: config.model,
-        });
-        responseText = completion.choices[0].message.content || "{}";
-        break;
-      }
-      case "openai": {
-        const openai = new OpenAI({ apiKey: config.apiKey });
-        const isOSeries = config.model.startsWith('o');
-        
-        const completion = await openai.chat.completions.create({
-          messages: [{ role: isOSeries ? "user" : "system", content: systemPrompt }],
-          model: config.model,
-          response_format: config.model.includes('gpt-4o') || config.model.includes('o3') ? { type: "json_object" } : undefined,
-        });
-        responseText = completion.choices[0].message.content || "{}";
-        break;
-      }
-      case "anthropic": {
-        const anthropic = new Anthropic({ apiKey: config.apiKey });
-        const message = await anthropic.messages.create({
-          model: config.model,
-          max_tokens: 2048,
-          system: "You are a JSON-only response bot for a strategy game. Never explain your answer, only return JSON.",
-          messages: [{ role: "user", content: systemPrompt }],
-        });
-        
-        if (message.content[0].type === 'text') {
-             responseText = message.content[0].text;
-        }
-        break;
-      }
-      default:
-        throw new Error(`Unsupported provider: ${config.provider}`);
+    // --- GOOGLE GEMINI ---
+    if (config.provider === "google") {
+      const genAI = new GoogleGenerativeAI(config.apiKey);
+      const model = genAI.getGenerativeModel({ model: config.model });
+      
+      const result = await model.generateContent(systemPrompt);
+      responseText = result.response.text();
+    } 
+    
+    // --- DEEPSEEK ---
+    else if (config.provider === "deepseek") {
+       const deepseek = new OpenAI({
+        apiKey: config.apiKey,
+        baseURL: "https://api.deepseek.com", 
+      });
+
+      const completion = await deepseek.chat.completions.create({
+        messages: [{ role: "system", content: systemPrompt }],
+        model: config.model, 
+      });
+      responseText = completion.choices[0].message.content || "{}";
     }
 
-    // Robust JSON cleaning (Reasoning models love to yap before the JSON)
+    // --- OPENAI ---
+    else if (config.provider === "openai") {
+      const openai = new OpenAI({ apiKey: config.apiKey });
+      const isOSeries = config.model.startsWith('o');
+      
+      const completion = await openai.chat.completions.create({
+        messages: [{ role: isOSeries ? "user" : "system", content: systemPrompt }],
+        model: config.model,
+        response_format: config.model.includes('gpt-4o') || config.model.includes('o3') ? { type: "json_object" } : undefined,
+      });
+      responseText = completion.choices[0].message.content || "{}";
+    }
+
+    // --- ANTHROPIC ---
+    else if (config.provider === "anthropic") {
+      const anthropic = new Anthropic({ apiKey: config.apiKey });
+      const message = await anthropic.messages.create({
+        model: config.model,
+        max_tokens: 2048,
+        system: "You are a JSON-only response bot for a strategy game. Never explain your answer, only return JSON.",
+        messages: [{ role: "user", content: systemPrompt }],
+      });
+      
+      if (message.content[0].type === 'text') {
+           responseText = message.content[0].text;
+      }
+    }
+
+    // Robust JSON cleaning
     const cleanJson = responseText
         .replace(/```json/g, "")
         .replace(/```/g, "")
-        // Advanced regex to find the largest JSON block if mixed with text
         .match(/(\{[\s\S]*\})/)?.[1] || responseText.trim();
         
     const parsed = JSON.parse(cleanJson);

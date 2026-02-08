@@ -25,7 +25,6 @@ export default function GamePage() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const logCounter = useRef(0);
 
-  // Load Map Data Once on Mount
   useEffect(() => {
     async function load() {
         const data = await loadWorldData();
@@ -43,7 +42,7 @@ export default function GamePage() {
   const handleStartGame = (config: GameConfig) => {
     setGameConfig(config);
     
-    // Determine Theme based on Scenario
+    // Theme Logic
     let theme: MapTheme = "classic";
     const s = config.scenario.toLowerCase();
     if (s.includes("cyber") || s.includes("future") || s.includes("robot") || s.includes("neon")) {
@@ -54,14 +53,12 @@ export default function GamePage() {
         theme = "blueprint";
     }
 
-    // Initialize State
     const initialPlayers = { ...INITIAL_PLAYERS };
-    
-    // Update Player Name to selected nation if possible, or keep custom
     const nation = provincesCache.find(p => p.id === config.playerNationId);
+    
+    // Setup Player
     if (nation) {
         initialPlayers["player"].name = nation.name;
-        // Also give them ownership of that nation
         const newProvinces = provincesCache.map(p => 
             p.id === config.playerNationId ? { ...p, ownerId: "player" } : p
         );
@@ -87,7 +84,7 @@ export default function GamePage() {
     setLogs([
         { id: "init-1", type: "info", text: `Welcome to Open Historia.` },
         { id: "init-2", type: "info", text: `Scenario: ${config.scenario}` },
-        { id: "init-3", type: "info", text: `Visual Theme: ${theme.toUpperCase()}` },
+        { id: "init-3", type: "info", text: `Difficulty: ${config.difficulty}` },
         { id: "init-4", type: "info", text: "The AI Game Master is listening..." },
     ]);
   };
@@ -100,14 +97,15 @@ export default function GamePage() {
     });
   }, []);
 
-  // Handle direct messages from Sidebar
   const handleSendMessage = (provinceId: string | number, message: string) => {
-      // Find country name
       const target = gameState?.provinces.find(p => p.id === provinceId);
       if (!target) return;
-
       const command = `Diplomatic Message to ${target.name}: "${message}"`;
       processCommand(command);
+  };
+
+  const handleNextTurn = () => {
+      processCommand("Wait / Advance Time (Next Turn)");
   };
 
   const processCommand = async (cmd: string) => {
@@ -158,15 +156,9 @@ export default function GamePage() {
                         return prev;
                     });
                 }
-                if (update.type === "gold") {
-                     setGameState(prev => {
-                        if (!prev) return null;
-                        const p = prev.players["player"];
-                        return { 
-                            ...prev, 
-                            players: { ...prev.players, player: { ...p, gold: p.gold + update.amount } } 
-                        };
-                     });
+                // Handle Time Advancement
+                if (update.type === "time") {
+                    setGameState(prev => prev ? ({ ...prev, turn: prev.turn + (update.amount || 1) }) : null);
                 }
             });
         }
@@ -218,26 +210,33 @@ export default function GamePage() {
         onCommand={processCommand}
       />
       
-      {/* Processing Indicator */}
       {processingTurn && (
           <div className="absolute bottom-20 left-4 text-xs text-amber-500 animate-pulse font-mono bg-slate-900/80 px-2 py-1 rounded">
-              [Uplink Active: Decrypting Response...]
+              [Processing...]
           </div>
       )}
 
+      {/* Top Bar with Time Skip */}
       {gameState && (
-        <div className="absolute top-0 left-0 w-full p-2 bg-gradient-to-b from-slate-950 to-transparent pointer-events-none flex justify-center gap-8 text-slate-200 font-mono text-lg z-10">
-            <div>
-                <span className="text-slate-500 text-sm uppercase mr-2">Year</span>
-                <span className="font-bold">{gameState.turn}</span>
-            </div>
-            <div>
-                <span className="text-amber-500 text-sm uppercase mr-2">Budget</span>
-                <span className="font-bold text-amber-400">${gameState.players["player"].gold}B</span>
-            </div>
-            <div>
-                <span className="text-blue-400 text-sm uppercase mr-2">Nation</span>
-                <span className="font-bold">{gameState.players["player"].name}</span>
+        <div className="absolute top-0 left-0 w-full p-2 bg-gradient-to-b from-slate-950 to-transparent pointer-events-none flex justify-center items-center gap-8 text-slate-200 font-mono text-lg z-10">
+            <div className="bg-slate-900/80 px-4 py-2 rounded-full border border-slate-700 backdrop-blur pointer-events-auto flex items-center gap-4">
+                <div>
+                    <span className="text-slate-500 text-sm uppercase mr-2">Year</span>
+                    <span className="font-bold">{gameState.turn}</span>
+                </div>
+                <div className="w-px h-6 bg-slate-700"></div>
+                <div>
+                    <span className="text-blue-400 text-sm uppercase mr-2">Nation</span>
+                    <span className="font-bold">{gameState.players["player"].name}</span>
+                </div>
+                <div className="w-px h-6 bg-slate-700"></div>
+                <button 
+                    onClick={handleNextTurn}
+                    disabled={processingTurn}
+                    className="bg-amber-700 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-bold px-3 py-1 rounded transition-colors uppercase"
+                >
+                    Advance Time
+                </button>
             </div>
         </div>
       )}

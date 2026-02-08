@@ -17,6 +17,7 @@ export interface GameConfig {
   apiKey: string;
   provider: Provider;
   model: string;
+  difficulty: "Sandbox" | "Easy" | "Realistic" | "Hardcore";
 }
 
 const MODELS: Record<Provider, { id: string; name: string }[]> = {
@@ -25,9 +26,9 @@ const MODELS: Record<Provider, { id: string; name: string }[]> = {
     { id: "deepseek-chat", name: "DeepSeek V3 (Fast)" },
   ],
   google: [
-    { id: "gemini-3.0-pro-001", name: "Gemini 3.0 Pro" },
-    { id: "gemini-3.0-flash-001", name: "Gemini 3.0 Flash" },
+    { id: "gemini-2.0-pro-exp-02-05", name: "Gemini 2.0 Pro (Newest)" },
     { id: "gemini-2.0-flash-thinking-exp-01-21", name: "Gemini 2.0 Flash Thinking" },
+    { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro (Stable)" },
   ],
   openai: [
     { id: "o1", name: "o1 (High Reasoning)" },
@@ -35,9 +36,8 @@ const MODELS: Record<Provider, { id: string; name: string }[]> = {
     { id: "gpt-4o", name: "GPT-4o (Standard)" },
   ],
   anthropic: [
-    { id: "claude-opus-4-6", name: "Claude Opus 4.6 (Best)" },
-    { id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5" },
-    { id: "claude-3-5-sonnet-latest", name: "Claude 3.5 Sonnet (Legacy)" },
+    { id: "claude-3-5-sonnet-latest", name: "Claude 3.5 Sonnet (Verified)" },
+    { id: "claude-3-5-haiku-latest", name: "Claude 3.5 Haiku" },
   ],
 };
 
@@ -46,8 +46,9 @@ export default function GameSetup({ provinces, onStartGame }: GameSetupProps) {
   const [scenario, setScenario] = useState("The global order is shifting. New alliances are forming...");
   const [playerNationId, setPlayerNationId] = useState("");
   const [apiKey, setApiKey] = useState("");
-  const [provider, setProvider] = useState<Provider>("deepseek");
-  const [model, setModel] = useState(MODELS["deepseek"][0].id);
+  const [provider, setProvider] = useState<Provider>("google");
+  const [model, setModel] = useState(MODELS["google"][0].id);
+  const [difficulty, setDifficulty] = useState<GameConfig["difficulty"]>("Realistic");
 
   // Update model when provider changes
   const handleProviderChange = (newProvider: Provider) => {
@@ -75,7 +76,7 @@ export default function GameSetup({ provinces, onStartGame }: GameSetupProps) {
         alert("Please select a nation and provide an API Key.");
         return;
     }
-    onStartGame({ year, scenario, playerNationId, apiKey, provider, model });
+    onStartGame({ year, scenario, playerNationId, apiKey, provider, model, difficulty });
   };
 
   return (
@@ -147,9 +148,24 @@ export default function GameSetup({ provinces, onStartGame }: GameSetupProps) {
                     />
                 </div>
                 <div>
-                    <label className="block text-sm font-bold text-slate-400 mb-1">Play As</label>
+                    <label className="block text-sm font-bold text-slate-400 mb-1">Difficulty</label>
                     <select 
-                        value={playerNationId}
+                        value={difficulty}
+                        onChange={e => setDifficulty(e.target.value as any)}
+                        className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-slate-100"
+                    >
+                        <option value="Sandbox">Sandbox (Creative Freedom)</option>
+                        <option value="Easy">Easy (Forgiving)</option>
+                        <option value="Realistic">Realistic (Standard)</option>
+                        <option value="Hardcore">Hardcore (Unforgiving)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <label className="block text-sm font-bold text-slate-400 mb-1">Play As</label>
+                <select 
+                    value={playerNationId}
                         onChange={e => setPlayerNationId(e.target.value)}
                         className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-slate-100"
                     >
@@ -158,7 +174,6 @@ export default function GameSetup({ provinces, onStartGame }: GameSetupProps) {
                             <option key={p.id} value={p.id}>{p.name}</option>
                         ))}
                     </select>
-                </div>
             </div>
 
             <div>
