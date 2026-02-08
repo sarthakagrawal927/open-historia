@@ -50,16 +50,7 @@ export async function POST(req: NextRequest) {
     switch (config.provider) {
       case "google": {
         const genAI = new GoogleGenerativeAI(config.apiKey);
-        
-              // FALLBACK: If frontend sends a hallucinated/invalid model ID, force a valid one.
-              let modelId = config.model;
-              if (modelId.includes("gemini-3.0") || modelId === "gemini-1.5-flash") {
-                  modelId = "gemini-1.5-flash-001"; 
-              }
-              if (modelId === "gemini-1.5-pro") {
-                  modelId = "gemini-1.5-pro-001";
-              }
-                const model = genAI.getGenerativeModel({ model: modelId });
+        const model = genAI.getGenerativeModel({ model: config.model });
         
         const result = await model.generateContent(systemPrompt);
         responseText = result.response.text();
