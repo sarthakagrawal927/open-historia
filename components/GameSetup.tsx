@@ -141,7 +141,7 @@ export default function GameSetup({ provinces, onStartGame }: GameSetupProps) {
                     <label className="block text-sm font-bold text-slate-400 mb-1">Starting Year</label>
                     <input 
                         type="number" 
-                        value={year}
+                        value={isNaN(year) ? "" : year}
                         onChange={e => setYear(parseInt(e.target.value))}
                         className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-slate-100"
                     />
