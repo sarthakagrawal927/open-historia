@@ -25,14 +25,18 @@ export async function POST(req: NextRequest) {
       **Player Command:** "${command}"
       
       **Instructions:**
-      1. Interpret the player's command in the context of the scenario.
-      2. Determine the outcome (success/failure) based on realism and game balance.
-      3. If the player wants to attack/claim a specific country, you MUST return a state update changing its owner to "player" if successful.
-      4. You can also deduct gold (e.g., -10 for claiming, -50 for war).
+      1. Interpret the player's command.
+      2. **DIPLOMACY:** If the command is a "Diplomatic Message to [Country]", you must reply AS that country's government/leader.
+         - Be realistic. If the player is weak, be dismissive. If strong, be respectful or fearful.
+         - Consider the "Scenario Context" (e.g., if it's Cold War, USSR will be hostile to USA).
+      3. **ACTIONS:** If the player wants to attack/claim/trade, determine the outcome based on realism.
+         - Attacking a strong nation without preparation should fail.
+         - Buying a country (claiming) is only possible for small/neutral/destabilized regions or with HUGE gold sums.
+      4. **UPDATES:** Return state updates if territories change hands or resources are spent.
       
       **Response Format (JSON ONLY):**
       {
-        "message": "A narrative description of what happened.",
+        "message": "The narrative response (e.g., 'The French President responds: ...' or 'Your troops advanced...')",
         "updates": [
            { "type": "owner", "provinceName": "Name of province", "newOwnerId": "player" },
            { "type": "gold", "amount": -10 }
@@ -40,8 +44,7 @@ export async function POST(req: NextRequest) {
       }
       
       IMPORTANT:
-      - Return ONLY the raw JSON object. No markdown, no backticks, no "json" prefix.
-      - If you use markdown, I will not be able to parse it.
+      - Return ONLY the raw JSON object. No markdown.
     `;
 
     let responseText = "";

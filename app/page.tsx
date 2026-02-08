@@ -65,7 +65,7 @@ export default function GamePage() {
         const newProvinces = provincesCache.map(p => 
             p.id === config.playerNationId ? { ...p, ownerId: "player" } : p
         );
-        setProvincesCache(newProvinces); // Update local cache for game start
+        setProvincesCache(newProvinces); 
         
         setGameState({
             turn: config.year,
@@ -75,7 +75,6 @@ export default function GamePage() {
             theme,
         });
     } else {
-        // Fallback
         setGameState({
             turn: config.year,
             players: initialPlayers,
@@ -95,12 +94,21 @@ export default function GamePage() {
 
   const handleSelectProvince = useCallback((provinceId: string | number | null) => {
     setGameState((prev) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if (!prev) return null;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return { ...prev, selectedProvinceId: provinceId as any };
     });
   }, []);
+
+  // Handle direct messages from Sidebar
+  const handleSendMessage = (provinceId: string | number, message: string) => {
+      // Find country name
+      const target = gameState?.provinces.find(p => p.id === provinceId);
+      if (!target) return;
+
+      const command = `Diplomatic Message to ${target.name}: "${message}"`;
+      processCommand(command);
+  };
 
   const processCommand = async (cmd: string) => {
     if (!gameState || !gameConfig || processingTurn) return;
@@ -109,11 +117,9 @@ export default function GamePage() {
     setProcessingTurn(true);
 
     try {
-        // Prepare simplified state for AI (avoid circular refs and massive payload)
         const simplifiedState = {
             turn: gameState.turn,
             players: gameState.players,
-            // Send simplified province list (just owners)
             provinces: gameState.provinces
                 .filter(p => p.ownerId !== null)
                 .map(p => ({ name: p.name, ownerId: p.ownerId }))
@@ -126,7 +132,7 @@ export default function GamePage() {
                 command: cmd,
                 gameState: simplifiedState,
                 config: gameConfig,
-                history: logs.slice(-5) // Send last few logs for context
+                history: logs.slice(-5) 
             })
         });
 
@@ -137,12 +143,9 @@ export default function GamePage() {
         }
 
         if (data.updates) {
-            // Apply Updates
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             data.updates.forEach((update: any) => {
                 if (update.type === "owner") {
-                    // Find province by name (AI returns name)
-                    // Fuzzy match?
                     setGameState(prev => {
                         if (!prev) return null;
                         const target = prev.provinces.find(p => p.name.toLowerCase() === update.provinceName.toLowerCase());
@@ -207,6 +210,7 @@ export default function GamePage() {
       <Sidebar 
         province={selectedProvince}
         owner={selectedProvince?.ownerId && gameState ? gameState.players[selectedProvince.ownerId] : undefined}
+        onSendMessage={handleSendMessage}
       />
 
       <CommandTerminal 
@@ -216,8 +220,8 @@ export default function GamePage() {
       
       {/* Processing Indicator */}
       {processingTurn && (
-          <div className="absolute bottom-20 left-4 text-xs text-amber-500 animate-pulse font-mono">
-              [AI Strategizing...]
+          <div className="absolute bottom-20 left-4 text-xs text-amber-500 animate-pulse font-mono bg-slate-900/80 px-2 py-1 rounded">
+              [Uplink Active: Decrypting Response...]
           </div>
       )}
 
@@ -232,7 +236,7 @@ export default function GamePage() {
                 <span className="font-bold text-amber-400">${gameState.players["player"].gold}B</span>
             </div>
             <div>
-                <span className="text-blue-400 text-sm uppercase mr-2">Leader</span>
+                <span className="text-blue-400 text-sm uppercase mr-2">Nation</span>
                 <span className="font-bold">{gameState.players["player"].name}</span>
             </div>
         </div>
