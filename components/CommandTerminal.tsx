@@ -13,19 +13,110 @@ interface CommandTerminalProps {
   onCommand: (cmd: string) => void;
 }
 
+const COMMAND_SUGGESTIONS = [
+  "Declare war on",
+  "Send trade offer to",
+  "Form alliance with",
+  "Send diplomatic message to",
+  "Build military units",
+  "Develop infrastructure",
+  "Research technology",
+  "Wait / Advance Time by",
+];
+
 export default function CommandTerminal({ logs, onCommand }: CommandTerminalProps) {
   const [input, setInput] = useState("");
+  const [commandHistory, setCommandHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([]);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
   const endRef = useRef<HTMLDivElement>(null);
+
+  // Load command history from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("oh_command_history");
+    if (saved) {
+      try {
+        setCommandHistory(JSON.parse(saved));
+      } catch (e) {
+        console.error("Failed to load command history", e);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
 
+  // Update suggestions when input changes
+  useEffect(() => {
+    if (input.trim().length > 0) {
+      const matches = COMMAND_SUGGESTIONS.filter((cmd) =>
+        cmd.toLowerCase().includes(input.toLowerCase())
+      );
+      setFilteredSuggestions(matches);
+      setShowSuggestions(matches.length > 0);
+      setSelectedSuggestionIndex(0);
+    } else {
+      setShowSuggestions(false);
+    }
+  }, [input]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
+
+    // Add to history
+    const newHistory = [input, ...commandHistory.filter(cmd => cmd !== input)].slice(0, 50);
+    setCommandHistory(newHistory);
+    localStorage.setItem("oh_command_history", JSON.stringify(newHistory));
+
     onCommand(input);
     setInput("");
+    setHistoryIndex(-1);
+    setShowSuggestions(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Navigate command history
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (commandHistory.length === 0) return;
+      const newIndex = Math.min(historyIndex + 1, commandHistory.length - 1);
+      setHistoryIndex(newIndex);
+      setInput(commandHistory[newIndex]);
+      setShowSuggestions(false);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (historyIndex <= 0) {
+        setHistoryIndex(-1);
+        setInput("");
+      } else {
+        const newIndex = historyIndex - 1;
+        setHistoryIndex(newIndex);
+        setInput(commandHistory[newIndex]);
+      }
+      setShowSuggestions(false);
+    }
+    // Navigate suggestions
+    else if (showSuggestions) {
+      if (e.key === "Tab" || (e.key === "ArrowDown" && !e.shiftKey)) {
+        e.preventDefault();
+        setSelectedSuggestionIndex((prev) => (prev + 1) % filteredSuggestions.length);
+      } else if (e.key === "ArrowUp" && !e.shiftKey) {
+        e.preventDefault();
+        setSelectedSuggestionIndex((prev) =>
+          prev === 0 ? filteredSuggestions.length - 1 : prev - 1
+        );
+      } else if (e.key === "Enter" && filteredSuggestions.length > 0) {
+        e.preventDefault();
+        setInput(filteredSuggestions[selectedSuggestionIndex]);
+        setShowSuggestions(false);
+      } else if (e.key === "Escape") {
+        setShowSuggestions(false);
+      }
+    }
   };
 
   return (
@@ -49,6 +140,28 @@ export default function CommandTerminal({ logs, onCommand }: CommandTerminalProp
         <div ref={endRef} />
       </div>
 
+      {/* Suggestions Dropdown */}
+      {showSuggestions && filteredSuggestions.length > 0 && (
+        <div className="absolute bottom-16 left-4 w-[30rem] bg-slate-900/95 border border-slate-700 rounded-lg shadow-xl backdrop-blur-md max-h-48 overflow-y-auto">
+          {filteredSuggestions.map((suggestion, idx) => (
+            <div
+              key={idx}
+              className={`px-4 py-2 cursor-pointer transition-colors ${
+                idx === selectedSuggestionIndex
+                  ? "bg-amber-700/50 text-amber-200"
+                  : "text-slate-300 hover:bg-slate-800"
+              }`}
+              onClick={() => {
+                setInput(suggestion);
+                setShowSuggestions(false);
+              }}
+            >
+              {suggestion}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Input Area */}
       <form onSubmit={handleSubmit} className="border-t border-slate-800 p-2 bg-slate-900/50">
         <div className="flex items-center gap-2">
@@ -57,8 +170,9 @@ export default function CommandTerminal({ logs, onCommand }: CommandTerminalProp
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
             className="flex-1 bg-transparent border-none outline-none text-slate-200 placeholder-slate-600 focus:ring-0"
-            placeholder="Enter orders (e.g., 'attack north')"
+            placeholder="Enter orders (↑↓ for history, Tab for suggestions)"
             autoFocus
             />
         </div>
