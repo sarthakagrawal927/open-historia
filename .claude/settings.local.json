@@ -6,7 +6,10 @@
       "Bash(openai:*)",
       "Bash(ps:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(gemini skills --help:*)",
+      "Bash(gemini skills:*)",
+      "Bash(chmod:*)"
     ]
   }
 }
