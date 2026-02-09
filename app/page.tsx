@@ -8,6 +8,7 @@ import GameSetup, { GameConfig } from "@/components/GameSetup";
 import { loadWorldData } from "@/lib/world-loader";
 import { INITIAL_PLAYERS } from "@/lib/map-generator";
 import { Province, GameState, MapTheme, GameEvent } from "@/lib/types";
+import { saveGame, autoSave } from "@/lib/game-storage";
 
 interface LogEntry {
   id: string;
@@ -29,6 +30,10 @@ export default function GamePage() {
   // Time Skip State
   const [timeStep, setTimeStep] = useState("1m");
   const [customTime, setCustomTime] = useState("");
+
+  // Save/Load State
+  const [lastSaveTime, setLastSaveTime] = useState<number | null>(null);
+  const [showSaveNotif, setShowSaveNotif] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -189,6 +194,23 @@ export default function GamePage() {
         addLog("Communication with HQ lost (Network Error).", "error");
     } finally {
         setProcessingTurn(false);
+        // Auto-save after each turn
+        if (gameState && gameConfig) {
+            autoSave(gameState, gameConfig, logs);
+        }
+    }
+  };
+
+  const handleSaveGame = () => {
+    if (!gameState || !gameConfig) return;
+    try {
+        saveGame(gameState, gameConfig, logs);
+        setLastSaveTime(Date.now());
+        setShowSaveNotif(true);
+        setTimeout(() => setShowSaveNotif(false), 2000);
+        addLog("Game saved successfully.", "success");
+    } catch (error) {
+        addLog(`Save failed: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
     }
   };
 
@@ -237,6 +259,12 @@ export default function GamePage() {
           </div>
       )}
 
+      {showSaveNotif && (
+          <div className="absolute top-20 right-4 text-sm text-emerald-400 font-mono bg-slate-900/90 px-3 py-2 rounded border border-emerald-700 shadow-lg animate-in fade-in duration-200">
+              ✓ Game Saved
+          </div>
+      )}
+
       {/* Top Bar with Time Skip */}
       {gameState && (
         <div className="absolute top-0 left-0 w-full p-2 bg-gradient-to-b from-slate-950 to-transparent pointer-events-none flex justify-center items-center gap-8 text-slate-200 font-mono text-lg z-10">
@@ -250,6 +278,13 @@ export default function GamePage() {
                     <span className="text-blue-400 text-sm uppercase mr-2">Nation</span>
                     <span className="font-bold">{gameState.players["player"].name}</span>
                 </div>
+                <div className="w-px h-6 bg-slate-700"></div>
+                <button
+                    onClick={handleSaveGame}
+                    className="bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold px-3 py-1 rounded transition-colors uppercase"
+                >
+                    Save
+                </button>
                 <div className="w-px h-6 bg-slate-700"></div>
                 <div className="flex items-center gap-2 pointer-events-auto">
                     <select 
