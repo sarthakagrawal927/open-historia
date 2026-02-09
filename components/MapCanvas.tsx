@@ -28,9 +28,22 @@ export default function MapCanvas({
   theme = "classic",
 }: MapCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
+
+  const getViewportSize = () => {
+    if (typeof window === "undefined") {
+      return { width: 960, height: 500 };
+    }
+    return { width: window.innerWidth, height: window.innerHeight };
+  };
+
+  // Calculate minZoom once for initialization.
+  const minZoom = useMemo(() => {
+    const { width, height } = getViewportSize();
+    return Math.max(width / 960, height / 500);
+  }, []);
+
   // Camera State
-  const [camera, setCamera] = useState({ x: 0, y: 0, k: 1 });
+  const [camera, setCamera] = useState(() => ({ x: 0, y: 0, k: minZoom }));
   const [isDragging, setIsDragging] = useState(false);
   const [lastMouse, setLastMouse] = useState({ x: 0, y: 0 });
 
@@ -39,23 +52,12 @@ export default function MapCanvas({
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const lastHoverCheck = useRef(0);
 
-  // Calculate the scale needed to fit the world map to the screen width
-  const minZoom = useMemo(() => {
-    if (typeof window === "undefined") return 1;
-    // World is roughly 960px wide at scale 150
-    return Math.max(window.innerWidth / 960, window.innerHeight / 500);
-  }, []);
-
-  // Initialize camera k to minZoom
-  useEffect(() => {
-    setCamera(prev => ({ ...prev, k: minZoom }));
-  }, [minZoom]);
-
   // Setup Projection
   const projection = useMemo(() => {
+    const { width, height } = getViewportSize();
     return d3.geoMercator()
       .scale(150)
-      .translate([window.innerWidth / 2, window.innerHeight / 2]);
+      .translate([width / 2, height / 2]);
   }, []);
 
   const pathGenerator = useMemo(() => {
@@ -81,7 +83,7 @@ export default function MapCanvas({
     return () => {
         canvas.removeEventListener("wheel", handleWheel);
     };
-  }, []);
+  }, [minZoom]);
 
 
   // Render Loop
@@ -132,7 +134,8 @@ export default function MapCanvas({
         ctx.beginPath();
         pathGenerator(province.feature);
 
-        if (province.ownerId && players[province.ownerId]) {
+        // Keep conquered territories in their native color instead of repainting with player color.
+        if (province.ownerId && province.ownerId !== "player" && players[province.ownerId]) {
           ctx.fillStyle = players[province.ownerId].color;
         } else {
           ctx.fillStyle = province.color; 

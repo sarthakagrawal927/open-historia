@@ -1,12 +1,17 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Province } from "@/lib/types";
 import { encryptKey, decryptKey } from "@/lib/crypto";
+import type { SavedGame } from "@/lib/game-storage";
 
 interface GameSetupProps {
   provinces: Province[];
   onStartGame: (config: GameConfig) => void;
+  savedGames?: SavedGame[];
+  onLoadSavedGame?: (saveId: string) => void;
+  onDeleteSavedGame?: (saveId: string) => void;
+  onRefreshSavedGames?: () => void;
 }
 
 export type Provider = "google" | "openai" | "anthropic" | "deepseek";
@@ -27,10 +32,9 @@ const MODELS: Record<Provider, { id: string; name: string }[]> = {
     { id: "deepseek-chat", name: "DeepSeek V3 (Fast)" },
   ],
   google: [
-    { id: "gemini-3.0-flash", name: "Gemini 3.0 Flash" },
-    { id: "gemini-2.0-flash-exp", name: "Gemini 2.0 Flash (Exp)" },
-    { id: "gemini-1.5-pro-001", name: "Gemini 1.5 Pro (Stable)" },
-    { id: "gemini-1.5-flash-001", name: "Gemini 1.5 Flash (Fast)" },
+    { id: "gemini-3-flash-preview", name: "Gemini 3 Flash (Preview)" },
+    { id: "gemini-3-pro-preview", name: "Gemini 3 Pro (Preview)" },
+    { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash (Stable)" },
   ],
   openai: [
     { id: "o1-preview", name: "o1 Preview (Reasoning)" },
@@ -43,35 +47,95 @@ const MODELS: Record<Provider, { id: string; name: string }[]> = {
   ],
 };
 
-export default function GameSetup({ provinces, onStartGame }: GameSetupProps) {
+const DEFAULT_PROVIDER: Provider = "google";
+
+const getProviderStorageKey = (provider: Provider) => `oh_key_${provider}`;
+
+const loadProviderKey = (provider: Provider) => {
+  if (typeof window === "undefined") return { apiKey: "", remember: false };
+  const storageKey = getProviderStorageKey(provider);
+
+  try {
+    const saved = localStorage.getItem(storageKey);
+    if (!saved) return { apiKey: "", remember: false };
+
+    const decrypted = decryptKey(saved);
+    if (!decrypted) {
+      localStorage.removeItem(storageKey);
+      return { apiKey: "", remember: false };
+    }
+
+    return { apiKey: decrypted, remember: true };
+  } catch (error) {
+    console.error("Failed to load saved API key", error);
+    return { apiKey: "", remember: false };
+  }
+};
+
+const persistProviderKey = (provider: Provider, rawApiKey: string, remember: boolean) => {
+  if (typeof window === "undefined") return;
+  const storageKey = getProviderStorageKey(provider);
+
+  try {
+    if (!remember) {
+      localStorage.removeItem(storageKey);
+      return;
+    }
+
+    const normalizedApiKey = rawApiKey.trim();
+    if (!normalizedApiKey) {
+      localStorage.removeItem(storageKey);
+      return;
+    }
+
+    const encrypted = encryptKey(normalizedApiKey);
+    if (encrypted) {
+      localStorage.setItem(storageKey, encrypted);
+    }
+  } catch (error) {
+    console.error("Failed to persist API key", error);
+  }
+};
+
+export default function GameSetup({
+  provinces,
+  onStartGame,
+  savedGames = [],
+  onLoadSavedGame,
+  onDeleteSavedGame,
+  onRefreshSavedGames,
+}: GameSetupProps) {
   const [year, setYear] = useState(2026);
   const [scenario, setScenario] = useState("The global order is shifting. New alliances are forming...");
   const [playerNationId, setPlayerNationId] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [rememberKey, setRememberKey] = useState(false);
-  const [provider, setProvider] = useState<Provider>("google");
-  const [model, setModel] = useState(MODELS["google"][0].id);
+  
+  const [provider, setProvider] = useState<Provider>(DEFAULT_PROVIDER);
+  
+  const [apiKey, setApiKey] = useState(() => loadProviderKey(DEFAULT_PROVIDER).apiKey);
+  
+  const [rememberKey, setRememberKey] = useState(() => loadProviderKey(DEFAULT_PROVIDER).remember);
+
+  const [model, setModel] = useState(MODELS[DEFAULT_PROVIDER][0].id);
   const [difficulty, setDifficulty] = useState<GameConfig["difficulty"]>("Realistic");
 
-  // Load key from storage
-  useEffect(() => {
-    const saved = localStorage.getItem(`oh_key_${provider}`);
-    if (saved) {
-      const decrypted = decryptKey(saved);
-      if (decrypted) {
-        setApiKey(decrypted);
-        setRememberKey(true);
-      }
-    } else {
-        setApiKey("");
-        setRememberKey(false);
-    }
-  }, [provider]);
-
-  // Update model when provider changes
   const handleProviderChange = (newProvider: Provider) => {
     setProvider(newProvider);
     setModel(MODELS[newProvider][0].id);
+    const { apiKey: savedApiKey, remember } = loadProviderKey(newProvider);
+    setApiKey(savedApiKey);
+    setRememberKey(remember);
+  };
+
+  const handleApiKeyChange = (nextApiKey: string) => {
+    setApiKey(nextApiKey);
+    if (rememberKey) {
+      persistProviderKey(provider, nextApiKey, true);
+    }
+  };
+
+  const handleRememberKeyChange = (nextRemember: boolean) => {
+    setRememberKey(nextRemember);
+    persistProviderKey(provider, apiKey, nextRemember);
   };
 
   const majorNations = provinces
@@ -90,23 +154,20 @@ export default function GameSetup({ provinces, onStartGame }: GameSetupProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!playerNationId || !apiKey) {
+    const normalizedApiKey = apiKey.trim();
+
+    if (!playerNationId || !normalizedApiKey) {
         alert("Please select a nation and provide an API Key.");
         return;
     }
 
-    if (rememberKey) {
-        localStorage.setItem(`oh_key_${provider}`, encryptKey(apiKey));
-    } else {
-        localStorage.removeItem(`oh_key_${provider}`);
-    }
-
-    onStartGame({ year, scenario, playerNationId, apiKey, provider, model, difficulty });
+    persistProviderKey(provider, normalizedApiKey, rememberKey);
+    onStartGame({ year, scenario, playerNationId, apiKey: normalizedApiKey, provider, model, difficulty });
   };
 
-  return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-sm p-4">
-      <div className="w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+	  return (
+	    <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-sm p-4">
+	      <div className="w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         <div className="p-6 bg-slate-800 border-b border-slate-700 flex justify-between items-center">
             <div>
                 <h1 className="text-3xl font-serif text-amber-500 mb-2">Open Historia</h1>
@@ -117,7 +178,7 @@ export default function GameSetup({ provinces, onStartGame }: GameSetupProps) {
             </div>
         </div>
         
-        <form onSubmit={handleSubmit} className="p-8 space-y-6 overflow-y-auto">
+	        <form onSubmit={handleSubmit} className="p-8 space-y-6 overflow-y-auto">
             
             {/* API Key Section */}
             <div className="p-4 bg-slate-800/50 rounded border border-slate-700 space-y-4">
@@ -154,7 +215,7 @@ export default function GameSetup({ provinces, onStartGame }: GameSetupProps) {
                     <input 
                         type="password" 
                         value={apiKey}
-                        onChange={e => setApiKey(e.target.value)}
+                        onChange={e => handleApiKeyChange(e.target.value)}
                         className="w-full bg-slate-950 border border-slate-600 rounded p-2 text-slate-100 focus:border-amber-500 outline-none"
                         placeholder={`Enter your ${getProviderName(provider)} API Key`}
                     />
@@ -164,7 +225,7 @@ export default function GameSetup({ provinces, onStartGame }: GameSetupProps) {
                             <input 
                                 type="checkbox" 
                                 checked={rememberKey}
-                                onChange={e => setRememberKey(e.target.checked)}
+                                onChange={e => handleRememberKeyChange(e.target.checked)}
                                 className="accent-amber-600 bg-slate-900 border-slate-600 rounded focus:ring-amber-500"
                             />
                             Remember Key (Encrypted)
@@ -187,7 +248,7 @@ export default function GameSetup({ provinces, onStartGame }: GameSetupProps) {
                     <label className="block text-sm font-bold text-slate-400 mb-1">Difficulty</label>
                     <select 
                         value={difficulty}
-                        onChange={e => setDifficulty(e.target.value as any)}
+                        onChange={e => setDifficulty(e.target.value as GameConfig["difficulty"])}
                         className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-slate-100"
                     >
                         <option value="Sandbox">Sandbox (Creative Freedom)</option>
@@ -223,14 +284,66 @@ export default function GameSetup({ provinces, onStartGame }: GameSetupProps) {
                 <p className="text-xs text-slate-500 mt-1">The AI will use this to set the initial mood and logic.</p>
             </div>
 
-            <button 
-                type="submit"
-                className="w-full py-4 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded shadow-lg transition-colors"
-            >
-                Initialize Simulation
-            </button>
-        </form>
-      </div>
-    </div>
-  );
-}
+	            <button 
+	                type="submit"
+	                className="w-full py-4 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded shadow-lg transition-colors"
+	            >
+	                Initialize Simulation
+	            </button>
+
+              <div className="pt-4 border-t border-slate-700">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-sm font-bold uppercase tracking-wide text-slate-300">Saved Games</h2>
+                  <button
+                    type="button"
+                    onClick={() => onRefreshSavedGames?.()}
+                    className="text-xs px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-200"
+                  >
+                    Refresh
+                  </button>
+                </div>
+
+                {savedGames.length === 0 && (
+                  <p className="text-xs text-slate-500">No saves found in local storage yet.</p>
+                )}
+
+                {savedGames.length > 0 && (
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {savedGames.map((save) => (
+                      <div key={save.id} className="flex items-center justify-between gap-3 p-2 rounded border border-slate-700 bg-slate-800/40">
+                        <div className="min-w-0">
+                          <div className="text-xs text-slate-200 truncate">
+                            {save.id === "autosave" ? "Autosave" : "Manual Save"}
+                            {" · "}
+                            {new Date(save.timestamp).toLocaleString()}
+                          </div>
+                          <div className="text-[11px] text-slate-400 truncate">
+                            Turn {save.gameState.turn} · {save.gameConfig.provider}/{save.gameConfig.model}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => onLoadSavedGame?.(save.id)}
+                            className="text-[11px] uppercase bg-amber-700 hover:bg-amber-600 text-white font-bold px-2 py-1 rounded"
+                          >
+                            Load
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteSavedGame?.(save.id)}
+                            className="text-[11px] uppercase bg-rose-700 hover:bg-rose-600 text-white font-bold px-2 py-1 rounded"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+	        </form>
+	      </div>
+	    </div>
+	  );
+	}

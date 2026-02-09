@@ -61,7 +61,9 @@ export async function loadWorldData(): Promise<Province[]> {
     
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const provinces: Province[] = geojson.features
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .filter((feature: any) => feature.id !== "010" && feature.id !== 10) 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .map((feature: any, index: number) => {
        const id = feature.id ? String(feature.id).padStart(3, '0') : String(index);
        const name = COUNTRY_NAMES[id] || `Region ${id}`;

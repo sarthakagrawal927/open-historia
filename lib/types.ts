@@ -34,8 +34,7 @@ export type GameState = {
   turn: number;
   players: Record<string, Player>;
   provinces: Province[];
-  selectedProvinceId: number | null;
+  selectedProvinceId: string | number | null;
   theme: MapTheme;
   events?: GameEvent[];
 };
-

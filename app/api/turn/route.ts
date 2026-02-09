@@ -3,6 +3,154 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 
+const DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview";
+const FALLBACK_GEMINI_MODELS = [
+  "gemini-3-flash-preview",
+  "gemini-2.5-flash",
+  "gemini-flash-latest",
+];
+
+const normalizeGeminiModel = (model: string | undefined) => {
+  if (!model) return DEFAULT_GEMINI_MODEL;
+  const trimmed = model.trim();
+  if (!trimmed) return DEFAULT_GEMINI_MODEL;
+  return trimmed.startsWith("models/") ? trimmed.slice("models/".length) : trimmed;
+};
+
+const isModelSelectionError = (error: unknown) => {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  return (
+    message.includes("not found") ||
+    message.includes("unsupported") ||
+    message.includes("invalid model") ||
+    message.includes("404")
+  );
+};
+
+type ParsedUpdate =
+  | { type: "owner"; provinceName: string; newOwnerId: string }
+  | { type: "time"; amount: number }
+  | { type: "event"; description: string; eventType: "diplomacy" | "war" | "discovery" | "flavor"; year: number };
+
+const normalizeEventType = (eventType: unknown): "diplomacy" | "war" | "discovery" | "flavor" => {
+  if (eventType === "diplomacy" || eventType === "war" || eventType === "discovery" || eventType === "flavor") {
+    return eventType;
+  }
+  return "flavor";
+};
+
+const sanitizeAiPayload = (
+  payload: unknown,
+  fallbackYear: number
+): { message: string; updates: ParsedUpdate[] } => {
+  const safePayload = (payload && typeof payload === "object" ? payload : {}) as {
+    message?: unknown;
+    updates?: unknown;
+  };
+
+  const message =
+    typeof safePayload.message === "string" && safePayload.message.trim()
+      ? safePayload.message.trim()
+      : "The world watches your move. Issue your next command.";
+
+  const updates: ParsedUpdate[] = [];
+  if (Array.isArray(safePayload.updates)) {
+    safePayload.updates.forEach((update) => {
+      if (!update || typeof update !== "object") return;
+      const u = update as Record<string, unknown>;
+
+      if (u.type === "owner" && typeof u.provinceName === "string" && typeof u.newOwnerId === "string") {
+        updates.push({
+          type: "owner",
+          provinceName: u.provinceName.trim(),
+          newOwnerId: u.newOwnerId.trim(),
+        });
+      }
+
+      if (u.type === "time") {
+        const rawAmount = typeof u.amount === "number" ? u.amount : Number(u.amount);
+        if (Number.isFinite(rawAmount)) {
+          updates.push({
+            type: "time",
+            amount: Math.trunc(rawAmount),
+          });
+        }
+      }
+
+      if (u.type === "event" && typeof u.description === "string") {
+        const rawYear = typeof u.year === "number" ? u.year : Number(u.year);
+        updates.push({
+          type: "event",
+          description: u.description.trim(),
+          eventType: normalizeEventType(u.eventType),
+          year: Number.isFinite(rawYear) ? Math.trunc(rawYear) : fallbackYear,
+        });
+      }
+    });
+  }
+
+  return { message, updates };
+};
+
+const buildTurnPrompt = (args: {
+  command: string;
+  gameState: {
+    turn: number;
+    players: Record<string, { name: string }>;
+  };
+  config: {
+    scenario: string;
+    difficulty: string;
+  };
+  history?: Array<{ type?: string; text: string }>;
+  events?: Array<{ year: number; description: string }>;
+}) => {
+  const { command, gameState, config, history, events } = args;
+
+  return `
+You are the Game Master for a grand strategy simulation called "Open Historia".
+
+GAME CONTEXT
+- Scenario: ${config.scenario}
+- Year: ${gameState.turn}
+- Player Nation: ${gameState.players["player"].name}
+- Difficulty: ${config.difficulty}
+
+RECENT HISTORY
+${history ? history.map((h) => `[${h.type?.toUpperCase() || "INFO"}] ${h.text}`).join("\n") : "No history yet."}
+
+WORLD EVENTS MEMORY
+${events ? events.map((e) => `[Year ${e.year}] ${e.description}`).join("\n") : "No significant events yet."}
+
+PLAYER COMMAND
+"${command}"
+
+SIMULATION RULES
+1) Stay internally consistent with prior events, alliances, wars, and tone.
+2) If the command is diplomatic, roleplay as the target leader with strategic motives.
+3) If time advances, narrate consequences and include a "time" update.
+4) Only emit "owner" updates when control clearly changes.
+5) Emit "event" updates for major geopolitical developments.
+6) Keep response grounded and plausible for the selected difficulty.
+
+OUTPUT CONTRACT (STRICT JSON ONLY)
+Return one JSON object with this shape:
+{
+  "message": "2-6 sentence narrative response",
+  "updates": [
+    { "type": "owner", "provinceName": "Exact Name", "newOwnerId": "player|ai_id" },
+    { "type": "time", "amount": 1 },
+    { "type": "event", "description": "Event summary", "eventType": "war|diplomacy|discovery|flavor", "year": ${gameState.turn} }
+  ]
+}
+
+HARD CONSTRAINTS
+- No markdown.
+- No keys outside "message" and "updates".
+- If no state change, return "updates": [].
+`;
+};
+
 export async function POST(req: NextRequest) {
   try {
     const { command, gameState, config, history, events } = await req.json();
@@ -11,57 +159,43 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "API Key missing" }, { status: 400 });
     }
 
-    const systemPrompt = `
-      You are the Game Master for a grand strategy game called "Open Historia".
-      
-      **Game Context:**
-      - **Scenario:** ${config.scenario}
-      - **Year:** ${gameState.turn}
-      - **Player Nation:** ${gameState.players["player"].name}
-      - **Difficulty:** ${config.difficulty}
-      
-      **Recent History (Logs):**
-      ${history ? history.map((h: any) => `[${h.type?.toUpperCase() || 'INFO'}] ${h.text}`).join("\n") : "No history yet."}
-      
-      **World Events (Memory):**
-      ${events ? events.map((e: any) => `[Year ${e.year}] ${e.description}`).join("\n") : "No significant events yet."}
-
-      **Player Command:** "${command}"
-      
-      **Instructions:**
-      1. **ROLEPLAY:** If the command is diplomatic, reply AS the target nation's leader.
-         - Consider the difficulty: In "Hardcore", nations are suspicious and aggressive.
-         - Use the **Recent History** and **World Events** to maintain continuity. If a nation was at war with the player, they should remain hostile.
-      2. **TIME:** If the command is "Wait" or "Advance Time by [Period]", describe what happens in the world over that specific duration.
-         - Update the "time" state by a relative amount (e.g., if period is 1 year, amount is 1).
-      3. **EVENTS:** If a major event happens (war, alliance, disaster), you MUST include it in the "updates" array as type "event".
-      4. **REALISM:**
-         - Actions take time. Resources are abstract but limited.
-      
-      **Response Format (JSON ONLY):**
-      {
-        "message": "Narrative response...",
-        "updates": [
-           { "type": "owner", "provinceName": "Exact Name", "newOwnerId": "player" },
-           { "type": "time", "amount": 1 },
-           { "type": "event", "description": "The Empire of X has declared war on Y!", "eventType": "war", "year": ${gameState.turn} }
-        ]
-      }
-      
-      IMPORTANT:
-      - Return ONLY the raw JSON object. No markdown.
-      - "updates" array is optional, only use if map/time changes or new events occur.
-    `;
+    const systemPrompt = buildTurnPrompt({ command, gameState, config, history, events });
 
     let responseText = "";
 
     switch (config.provider) {
       case "google": {
         const genAI = new GoogleGenerativeAI(config.apiKey);
-        const model = genAI.getGenerativeModel({ model: config.model });
-        
-        const result = await model.generateContent(systemPrompt);
-        responseText = result.response.text();
+        const preferredModel = normalizeGeminiModel(config.model);
+
+        const requestGemini = async (modelName: string) => {
+          const model = genAI.getGenerativeModel({
+            model: modelName,
+            generationConfig: { responseMimeType: "application/json" },
+          });
+          const result = await model.generateContent(systemPrompt);
+          return result.response.text();
+        };
+
+        const modelCandidates = Array.from(
+          new Set([preferredModel, ...FALLBACK_GEMINI_MODELS])
+        );
+
+        let lastModelError: unknown = null;
+        for (const modelName of modelCandidates) {
+          try {
+            responseText = await requestGemini(modelName);
+            lastModelError = null;
+            break;
+          } catch (error) {
+            if (!isModelSelectionError(error)) throw error;
+            lastModelError = error;
+          }
+        }
+
+        if (!responseText && lastModelError) {
+          throw lastModelError;
+        }
         break;
       }
       case "deepseek": {
@@ -111,8 +245,8 @@ export async function POST(req: NextRequest) {
         .match(/(\{[\s\S]*\})/)?.[1] || responseText.trim();
         
     const parsed = JSON.parse(cleanJson);
-
-    return NextResponse.json(parsed);
+    const sanitized = sanitizeAiPayload(parsed, gameState.turn);
+    return NextResponse.json(sanitized);
 
   } catch (error) {
     console.error("AI Error:", error);

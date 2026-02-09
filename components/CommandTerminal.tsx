@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 
 interface LogEntry {
   id: string; // Changed to string
@@ -26,41 +26,33 @@ const COMMAND_SUGGESTIONS = [
 
 export default function CommandTerminal({ logs, onCommand }: CommandTerminalProps) {
   const [input, setInput] = useState("");
-  const [commandHistory, setCommandHistory] = useState<string[]>([]);
+  const [commandHistory, setCommandHistory] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem("oh_command_history");
+        try {
+            return saved ? JSON.parse(saved) : [];
+        } catch (e) {
+            console.error(e);
+            return [];
+        }
+    }
+    return [];
+  });
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([]);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
   const endRef = useRef<HTMLDivElement>(null);
-
-  // Load command history from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem("oh_command_history");
-    if (saved) {
-      try {
-        setCommandHistory(JSON.parse(saved));
-      } catch (e) {
-        console.error("Failed to load command history", e);
-      }
-    }
-  }, []);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
 
-  // Update suggestions when input changes
-  useEffect(() => {
-    if (input.trim().length > 0) {
-      const matches = COMMAND_SUGGESTIONS.filter((cmd) =>
-        cmd.toLowerCase().includes(input.toLowerCase())
-      );
-      setFilteredSuggestions(matches);
-      setShowSuggestions(matches.length > 0);
-      setSelectedSuggestionIndex(0);
-    } else {
-      setShowSuggestions(false);
-    }
+  // Derived state for suggestions
+  const filteredSuggestions = useMemo(() => {
+    if (input.trim().length === 0) return [];
+    return COMMAND_SUGGESTIONS.filter((cmd) =>
+      cmd.toLowerCase().includes(input.toLowerCase())
+    );
   }, [input]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -100,7 +92,7 @@ export default function CommandTerminal({ logs, onCommand }: CommandTerminalProp
       setShowSuggestions(false);
     }
     // Navigate suggestions
-    else if (showSuggestions) {
+    else if (showSuggestions && filteredSuggestions.length > 0) {
       if (e.key === "Tab" || (e.key === "ArrowDown" && !e.shiftKey)) {
         e.preventDefault();
         setSelectedSuggestionIndex((prev) => (prev + 1) % filteredSuggestions.length);
@@ -166,11 +158,15 @@ export default function CommandTerminal({ logs, onCommand }: CommandTerminalProp
       <form onSubmit={handleSubmit} className="border-t border-slate-800 p-2 bg-slate-900/50">
         <div className="flex items-center gap-2">
             <span className="text-amber-500 font-bold animate-pulse">&gt;</span>
-            <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
+	            <input
+	            type="text"
+	            value={input}
+	            onChange={(e) => {
+                setInput(e.target.value);
+                setShowSuggestions(true);
+                setSelectedSuggestionIndex(0);
+              }}
+	            onKeyDown={handleKeyDown}
             className="flex-1 bg-transparent border-none outline-none text-slate-200 placeholder-slate-600 focus:ring-0"
             placeholder="Enter orders (↑↓ for history, Tab for suggestions)"
             autoFocus

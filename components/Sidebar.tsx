@@ -60,7 +60,7 @@ export default function Sidebar({ province, owner, onSendMessage }: SidebarProps
         
         {/* Context / State */}
         <div className="p-3 bg-slate-800/30 rounded border border-slate-700 text-sm text-slate-300 italic">
-             "Current intelligence suggests a state of {province.resources.defense > 7 ? "high alert" : "peace"}."
+             &quot;Current intelligence suggests a state of {province.resources.defense > 7 ? "high alert" : "peace"}.&quot;
         </div>
       </div>
 

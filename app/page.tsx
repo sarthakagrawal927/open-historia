@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import MapCanvas from "@/components/MapCanvas";
 import Sidebar from "@/components/Sidebar";
 import CommandTerminal from "@/components/CommandTerminal";
@@ -8,7 +8,15 @@ import GameSetup, { GameConfig } from "@/components/GameSetup";
 import { loadWorldData } from "@/lib/world-loader";
 import { INITIAL_PLAYERS } from "@/lib/map-generator";
 import { Province, GameState, MapTheme, GameEvent } from "@/lib/types";
-import { saveGame, autoSave } from "@/lib/game-storage";
+import {
+  saveGame,
+  autoSave,
+  listSavedGames,
+  loadGame,
+  deleteGame,
+  restoreSavedGameState,
+  SavedGame,
+} from "@/lib/game-storage";
 
 interface LogEntry {
   id: string;
@@ -25,7 +33,6 @@ export default function GamePage() {
   
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [events, setEvents] = useState<GameEvent[]>([]);
-  const logCounter = useRef(0);
 
   // Time Skip State
   const [timeStep, setTimeStep] = useState("1m");
@@ -34,19 +41,33 @@ export default function GamePage() {
   // Save/Load State
   const [lastSaveTime, setLastSaveTime] = useState<number | null>(null);
   const [showSaveNotif, setShowSaveNotif] = useState(false);
+  const [savedGames, setSavedGames] = useState<SavedGame[]>([]);
+  const [showSavesPanel, setShowSavesPanel] = useState(false);
+
+  const refreshSavedGames = useCallback(() => {
+    if (typeof window === "undefined") return;
+    setSavedGames(listSavedGames());
+  }, []);
 
   useEffect(() => {
     async function load() {
         const data = await loadWorldData();
         setProvincesCache(data);
+        refreshSavedGames();
         setLoading(false);
     }
     load();
-  }, []);
+  }, [refreshSavedGames]);
+
+  const createLogId = () => {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    return `log-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  };
 
   const addLog = (text: string, type: LogEntry["type"] = "info") => {
-    logCounter.current += 1;
-    setLogs((prev) => [...prev, { id: `log-${Date.now()}-${logCounter.current}`, type, text }]);
+    setLogs((prev) => [...prev, { id: createLogId(), type, text }]);
   };
 
   const handleStartGame = (config: GameConfig) => {
@@ -92,11 +113,12 @@ export default function GamePage() {
     }
 
     setLogs([
-        { id: "init-1", type: "info", text: `Welcome to Open Historia.` },
-        { id: "init-2", type: "info", text: `Scenario: ${config.scenario}` },
-        { id: "init-3", type: "info", text: `Difficulty: ${config.difficulty}` },
-        { id: "init-4", type: "info", text: "The AI Game Master is listening..." },
+        { id: createLogId(), type: "info", text: "Welcome to Open Historia." },
+        { id: createLogId(), type: "info", text: `Scenario: ${config.scenario}` },
+        { id: createLogId(), type: "info", text: `Difficulty: ${config.difficulty}` },
+        { id: createLogId(), type: "info", text: "The AI Game Master is listening..." },
     ]);
+    setEvents([]);
   };
 
   const handleSelectProvince = useCallback((provinceId: string | number | null) => {
@@ -194,24 +216,72 @@ export default function GamePage() {
         addLog("Communication with HQ lost (Network Error).", "error");
     } finally {
         setProcessingTurn(false);
-        // Auto-save after each turn
-        if (gameState && gameConfig) {
-            autoSave(gameState, gameConfig, logs);
-        }
     }
   };
 
   const handleSaveGame = () => {
     if (!gameState || !gameConfig) return;
     try {
-        saveGame(gameState, gameConfig, logs);
+        const saveId = saveGame(gameState, gameConfig, logs, undefined, events);
         setLastSaveTime(Date.now());
         setShowSaveNotif(true);
         setTimeout(() => setShowSaveNotif(false), 2000);
-        addLog("Game saved successfully.", "success");
+        refreshSavedGames();
+        addLog(`Game saved successfully (${saveId === "autosave" ? "autosave" : "manual save"}).`, "success");
     } catch (error) {
         addLog(`Save failed: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
     }
+  };
+
+  const handleLoadSavedGame = (saveId: string) => {
+    const saved = loadGame(saveId);
+    if (!saved) {
+      addLog(`Save "${saveId}" was not found.`, "error");
+      refreshSavedGames();
+      return;
+    }
+
+    if (provincesCache.length === 0) {
+      addLog("Map data is still loading. Try loading the save again in a moment.", "error");
+      return;
+    }
+
+    const restoredState = restoreSavedGameState(saved, provincesCache);
+    setGameConfig(saved.gameConfig);
+    setGameState(restoredState);
+    setProvincesCache(restoredState.provinces);
+    setEvents(saved.events || []);
+
+    const restoredLogs = saved.logs && saved.logs.length > 0 ? saved.logs : [];
+    setLogs([
+      ...restoredLogs,
+      {
+        id: createLogId(),
+        type: "success",
+        text: `Loaded save from ${new Date(saved.timestamp).toLocaleString()}.`,
+      },
+    ]);
+
+    setShowSavesPanel(false);
+  };
+
+  const handleDeleteSavedGame = (saveId: string) => {
+    deleteGame(saveId);
+    refreshSavedGames();
+    if (gameConfig) {
+      addLog(`Deleted save: ${saveId}`, "info");
+    }
+  };
+
+  useEffect(() => {
+    if (!gameState || !gameConfig) return;
+    autoSave(gameState, gameConfig, logs, events);
+    refreshSavedGames();
+  }, [gameState, gameConfig, logs, events, refreshSavedGames]);
+
+  const getNationLabel = (nationId: string) => {
+    const nation = provincesCache.find((province) => String(province.id) === String(nationId));
+    return nation?.name || nationId;
   };
 
   if (loading) return (
@@ -221,13 +291,20 @@ export default function GamePage() {
   );
 
   if (!gameConfig) {
-      return <GameSetup provinces={provincesCache} onStartGame={handleStartGame} />;
+      return (
+        <GameSetup
+          provinces={provincesCache}
+          onStartGame={handleStartGame}
+          savedGames={savedGames}
+          onLoadSavedGame={handleLoadSavedGame}
+          onDeleteSavedGame={handleDeleteSavedGame}
+          onRefreshSavedGames={refreshSavedGames}
+        />
+      );
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const selectedProvince = gameState?.selectedProvinceId !== null 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ? gameState?.provinces.find(p => p.id === (gameState.selectedProvinceId as any)) || null 
+    ? gameState?.provinces.find((p) => p.id === gameState.selectedProvinceId) || null 
     : null;
 
   return (
@@ -266,8 +343,8 @@ export default function GamePage() {
       )}
 
       {/* Top Bar with Time Skip */}
-      {gameState && (
-        <div className="absolute top-0 left-0 w-full p-2 bg-gradient-to-b from-slate-950 to-transparent pointer-events-none flex justify-center items-center gap-8 text-slate-200 font-mono text-lg z-10">
+	      {gameState && (
+	        <div className="absolute top-0 left-0 w-full p-2 bg-gradient-to-b from-slate-950 to-transparent pointer-events-none flex justify-center items-center gap-8 text-slate-200 font-mono text-lg z-10">
             <div className="bg-slate-900/80 px-4 py-2 rounded-full border border-slate-700 backdrop-blur pointer-events-auto flex items-center gap-4">
                 <div>
                     <span className="text-slate-500 text-sm uppercase mr-2">Year</span>
@@ -279,14 +356,24 @@ export default function GamePage() {
                     <span className="font-bold">{gameState.players["player"].name}</span>
                 </div>
                 <div className="w-px h-6 bg-slate-700"></div>
-                <button
-                    onClick={handleSaveGame}
-                    className="bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold px-3 py-1 rounded transition-colors uppercase"
-                >
-                    Save
-                </button>
-                <div className="w-px h-6 bg-slate-700"></div>
-                <div className="flex items-center gap-2 pointer-events-auto">
+	                <button
+	                    onClick={handleSaveGame}
+	                    className="bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold px-3 py-1 rounded transition-colors uppercase"
+                      title={lastSaveTime ? `Last save: ${new Date(lastSaveTime).toLocaleString()}` : "Save game"}
+	                >
+	                    Save
+	                </button>
+                  <button
+                      onClick={() => {
+                        refreshSavedGames();
+                        setShowSavesPanel(true);
+                      }}
+                      className="bg-sky-700 hover:bg-sky-600 text-white text-xs font-bold px-3 py-1 rounded transition-colors uppercase"
+                  >
+                      Saves ({savedGames.length})
+                  </button>
+	                <div className="w-px h-6 bg-slate-700"></div>
+	                <div className="flex items-center gap-2 pointer-events-auto">
                     <select 
                         value={timeStep}
                         onChange={(e) => setTimeStep(e.target.value)}
@@ -317,7 +404,59 @@ export default function GamePage() {
                 </div>
             </div>
         </div>
-      )}
-    </main>
-  );
-}
+	      )}
+
+        {showSavesPanel && (
+          <div className="absolute inset-0 z-40 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-3xl max-h-[85vh] overflow-hidden rounded-lg border border-slate-700 bg-slate-900 shadow-2xl">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
+                <h2 className="text-sm uppercase tracking-wide text-slate-200 font-bold">Saved Games</h2>
+                <button
+                  onClick={() => setShowSavesPanel(false)}
+                  className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1 rounded"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="max-h-[70vh] overflow-y-auto">
+                {savedGames.length === 0 && (
+                  <div className="px-4 py-6 text-sm text-slate-400">No saves yet.</div>
+                )}
+                {savedGames.map((save) => (
+                  <div key={`${save.id}-${save.timestamp}`} className="px-4 py-3 border-b border-slate-800 flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="text-sm text-slate-100 truncate">
+                        {save.id === "autosave" ? "Autosave" : "Manual Save"}
+                        {" · "}
+                        {getNationLabel(save.gameConfig.playerNationId)}
+                        {" · "}
+                        {save.gameConfig.provider}/{save.gameConfig.model}
+                      </div>
+                      <div className="text-xs text-slate-400 truncate">
+                        {new Date(save.timestamp).toLocaleString()} · Turn {save.gameState.turn}
+                      </div>
+                      <div className="text-xs text-slate-500 truncate">{save.gameConfig.scenario}</div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => handleLoadSavedGame(save.id)}
+                        className="bg-amber-700 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1 rounded uppercase"
+                      >
+                        Load
+                      </button>
+                      <button
+                        onClick={() => handleDeleteSavedGame(save.id)}
+                        className="bg-rose-700 hover:bg-rose-600 text-white text-xs font-bold px-3 py-1 rounded uppercase"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+	    </main>
+	  );
+	}
