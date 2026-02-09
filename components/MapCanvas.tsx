@@ -3,6 +3,7 @@
 import React, { useRef, useEffect, useState, useMemo } from "react";
 import { Province, Player, MapTheme } from "@/lib/types";
 import * as d3 from "d3-geo";
+import Tooltip from "./Tooltip";
 
 interface MapCanvasProps {
   provinces: Province[];
@@ -32,6 +33,11 @@ export default function MapCanvas({
   const [camera, setCamera] = useState({ x: 0, y: 0, k: 1 });
   const [isDragging, setIsDragging] = useState(false);
   const [lastMouse, setLastMouse] = useState({ x: 0, y: 0 });
+
+  // Tooltip State
+  const [hoveredProvince, setHoveredProvince] = useState<Province | null>(null);
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const lastHoverCheck = useRef(0);
 
   // Calculate the scale needed to fit the world map to the screen width
   const minZoom = useMemo(() => {
@@ -132,11 +138,16 @@ export default function MapCanvas({
           ctx.fillStyle = province.color; 
         }
         
+        // Highlight logic
         if (province.id === selectedProvinceId) {
              ctx.fillStyle = style.highlight; 
+        } else if (province.id === hoveredProvince?.id) {
+             ctx.fillStyle = style.highlight; // Reusing highlight for hover too, or could be slightly different
+             ctx.globalAlpha = 0.8;
         }
         
         ctx.fill();
+        ctx.globalAlpha = 1.0;
 
         ctx.lineWidth = 0.5 / camera.k;
         ctx.strokeStyle = style.border;
@@ -158,28 +169,50 @@ export default function MapCanvas({
     };
 
     render();
-  }, [provinces, players, camera, selectedProvinceId, pathGenerator, theme]);
+  }, [provinces, players, camera, selectedProvinceId, pathGenerator, theme, hoveredProvince]);
+
+  const getProvinceAt = (clientX: number, clientY: number) => {
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+    
+    const worldX = ((clientX - cx) / camera.k) + cx - camera.x;
+    const worldY = ((clientY - cy) / camera.k) + cy - camera.y;
+
+    const invert = projection.invert?.([worldX, worldY]);
+
+    if (invert) {
+        const [lon, lat] = invert;
+        return provinces.find(p => d3.geoContains(p.feature, [lon, lat]));
+    }
+    return null;
+  };
 
   // Mouse Handlers (Pan & Click)
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
     setLastMouse({ x: e.clientX, y: e.clientY });
+    setHoveredProvince(null); // Clear hover on drag start
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (isDragging) {
-      // Adjust drag speed by zoom level (slower when zoomed in)
-      // Actually standard pan is 1:1 with mouse movement, but since we scale context, 
-      // we need to divide delta by scale to keep it 1:1 visually?
-      // No, if we translate *before* scale, we divide. If we translate *after* scale (as usually done in simple cams), it's 1:1.
-      // In our render transform: translate(cx, cy) -> scale(k) -> translate(offset)
-      // So the offset is being scaled. Thus we need to divide dx/dy by k to make mouse tracking 1:1.
-      
       const dx = (e.clientX - lastMouse.x) / camera.k;
       const dy = (e.clientY - lastMouse.y) / camera.k;
       
       setCamera((prev) => ({ ...prev, x: prev.x + dx, y: prev.y + dy }));
       setLastMouse({ x: e.clientX, y: e.clientY });
+    } else {
+      // Throttled Hover Check
+      const now = Date.now();
+      if (now - lastHoverCheck.current > 40) { // Check every ~40ms
+          lastHoverCheck.current = now;
+          const p = getProvinceAt(e.clientX, e.clientY);
+          setHoveredProvince(p || null);
+          setTooltipPos({ x: e.clientX, y: e.clientY });
+      } else if (hoveredProvince) {
+          // If we already have a province, just update pos smoothly without re-calculating geo
+          setTooltipPos({ x: e.clientX, y: e.clientY });
+      }
     }
   };
 
@@ -187,47 +220,34 @@ export default function MapCanvas({
 
   const handleClick = (e: React.MouseEvent) => {
     if (isDragging) return;
-
-    // Inverse projection math is complex with custom camera transforms.
-    // Simpler approach: Iterate features and check d3.geoContains?
-    // But we need to transform the mouse point into [Lon, Lat].
     
-    // 1. Screen (Pixel) -> World (Pixel at k=1)
-    const cx = window.innerWidth / 2;
-    const cy = window.innerHeight / 2;
-    
-    // Reversing the render transform:
-    // ScreenX = (WorldX - cx + camX) * k + cx
-    // ScreenX - cx = (WorldX - cx + camX) * k
-    // (ScreenX - cx) / k = WorldX - cx + camX
-    // WorldX = ((ScreenX - cx) / k) + cx - camX
-    
-    const worldX = ((e.clientX - cx) / camera.k) + cx - camera.x;
-    const worldY = ((e.clientY - cy) / camera.k) + cy - camera.y;
-
-    // 2. World (Pixel) -> Lat/Long
-    // projection.invert expects [x, y] relative to the projection's translation/scale defaults.
-    const invert = projection.invert?.([worldX, worldY]);
-
-    if (invert) {
-        const [lon, lat] = invert;
-        // Optimization: rough bounds check or use spatial index
-        // For <200 countries, find() is fine (<2ms).
-        const clicked = provinces.find(p => d3.geoContains(p.feature, [lon, lat]));
-        onSelectProvince(clicked ? clicked.id : null);
-    }
+    // We can reuse getProvinceAt here
+    const clicked = getProvinceAt(e.clientX, e.clientY);
+    onSelectProvince(clicked ? clicked.id : null);
   };
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="block w-full h-full cursor-move bg-slate-900"
-      style={{ width: "100%", height: "100%" }}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-      onClick={handleClick}
-    />
+    <>
+      <canvas
+        ref={canvasRef}
+        className="block w-full h-full cursor-move bg-slate-900"
+        style={{ width: "100%", height: "100%" }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={() => {
+            handleMouseUp();
+            setHoveredProvince(null);
+        }}
+        onClick={handleClick}
+      />
+      {hoveredProvince && (
+        <Tooltip 
+          province={hoveredProvince}
+          owner={hoveredProvince.ownerId ? players[hoveredProvince.ownerId] : undefined}
+          position={tooltipPos}
+        />
+      )}
+    </>
   );
 }
