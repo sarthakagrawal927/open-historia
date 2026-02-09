@@ -7,7 +7,7 @@ import CommandTerminal from "@/components/CommandTerminal";
 import GameSetup, { GameConfig } from "@/components/GameSetup";
 import { loadWorldData } from "@/lib/world-loader";
 import { INITIAL_PLAYERS } from "@/lib/map-generator";
-import { Province, GameState, MapTheme } from "@/lib/types";
+import { Province, GameState, MapTheme, GameEvent } from "@/lib/types";
 
 interface LogEntry {
   id: string;
@@ -23,6 +23,7 @@ export default function GamePage() {
   const [provincesCache, setProvincesCache] = useState<Province[]>([]);
   
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [events, setEvents] = useState<GameEvent[]>([]);
   const logCounter = useRef(0);
 
   // Time Skip State
@@ -135,7 +136,8 @@ export default function GamePage() {
                 command: cmd,
                 gameState: simplifiedState,
                 config: gameConfig,
-                history: logs.slice(-5) 
+                history: logs.slice(-25),
+                events: events.slice(-10)
             })
         });
 
@@ -164,6 +166,20 @@ export default function GamePage() {
                 // Handle Time Advancement
                 if (update.type === "time") {
                     setGameState(prev => prev ? ({ ...prev, turn: prev.turn + (update.amount || 1) }) : null);
+                }
+                // Handle New Events
+                if (update.type === "event") {
+                    const newEvent: GameEvent = {
+                        id: `evt-${Date.now()}-${Math.random()}`,
+                        year: update.year || gameState.turn,
+                        description: update.description,
+                        type: update.eventType || "flavor"
+                    };
+                    setEvents(prev => [...prev, newEvent]);
+                    // Optional: Log major events to the terminal too
+                    if (update.eventType === "war" || update.eventType === "diplomacy") {
+                        addLog(`[EVENT] ${update.description}`, "info");
+                    }
                 }
             });
         }

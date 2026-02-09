@@ -5,7 +5,7 @@ import Anthropic from "@anthropic-ai/sdk";
 
 export async function POST(req: NextRequest) {
   try {
-    const { command, gameState, config } = await req.json();
+    const { command, gameState, config, history, events } = await req.json();
 
     if (!config.apiKey) {
       return NextResponse.json({ error: "API Key missing" }, { status: 400 });
@@ -20,30 +20,37 @@ export async function POST(req: NextRequest) {
       - **Player Nation:** ${gameState.players["player"].name}
       - **Difficulty:** ${config.difficulty}
       
+      **Recent History (Logs):**
+      ${history ? history.map((h: any) => `[${h.type?.toUpperCase() || 'INFO'}] ${h.text}`).join("\n") : "No history yet."}
+      
+      **World Events (Memory):**
+      ${events ? events.map((e: any) => `[Year ${e.year}] ${e.description}`).join("\n") : "No significant events yet."}
+
       **Player Command:** "${command}"
       
       **Instructions:**
       1. **ROLEPLAY:** If the command is diplomatic, reply AS the target nation's leader.
-         - Consider the difficulty: In "Hardcore", nations are suspicious and aggressive. In "Sandbox", they are compliant.
+         - Consider the difficulty: In "Hardcore", nations are suspicious and aggressive.
+         - Use the **Recent History** and **World Events** to maintain continuity. If a nation was at war with the player, they should remain hostile.
       2. **TIME:** If the command is "Wait" or "Advance Time by [Period]", describe what happens in the world over that specific duration.
-         - Update the "time" state by a relative amount (e.g., if period is 1 year, amount is 1. If 1 month, amount is 0.08).
-         - Mention the new date/year clearly in your narrative.
-      3. **REALISM:**
-         - Actions take time. You can say "Construction started, it will finish next year."
-         - No gold budget. Resources are abstract. If a player does too much at once, say their bureaucracy is overwhelmed.
+         - Update the "time" state by a relative amount (e.g., if period is 1 year, amount is 1).
+      3. **EVENTS:** If a major event happens (war, alliance, disaster), you MUST include it in the "updates" array as type "event".
+      4. **REALISM:**
+         - Actions take time. Resources are abstract but limited.
       
       **Response Format (JSON ONLY):**
       {
         "message": "Narrative response...",
         "updates": [
            { "type": "owner", "provinceName": "Exact Name", "newOwnerId": "player" },
-           { "type": "time", "amount": 1 } 
+           { "type": "time", "amount": 1 },
+           { "type": "event", "description": "The Empire of X has declared war on Y!", "eventType": "war", "year": ${gameState.turn} }
         ]
       }
       
       IMPORTANT:
       - Return ONLY the raw JSON object. No markdown.
-      - "updates" array is optional, only use if map/time changes.
+      - "updates" array is optional, only use if map/time changes or new events occur.
     `;
 
     let responseText = "";

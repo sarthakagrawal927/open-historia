@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gemini --version:*)",
+      "Bash(gemini --help:*)",
+      "Bash(openai:*)",
+      "Bash(ps:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ]
+  }
+}

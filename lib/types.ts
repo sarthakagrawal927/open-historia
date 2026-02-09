@@ -23,11 +23,19 @@ export type Province = {
 
 export type MapTheme = "classic" | "cyberpunk" | "parchment" | "blueprint";
 
+export type GameEvent = {
+  id: string;
+  year: number;
+  description: string;
+  type: "diplomacy" | "war" | "discovery" | "flavor";
+};
+
 export type GameState = {
   turn: number;
   players: Record<string, Player>;
   provinces: Province[];
   selectedProvinceId: number | null;
   theme: MapTheme;
+  events?: GameEvent[];
 };
 
