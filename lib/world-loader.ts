@@ -80,8 +80,10 @@ export async function loadWorldData(): Promise<Province[]> {
          center: [0, 0], 
          neighbors: [], 
          resources: {
-           population: Math.floor(Math.random() * 100) + 10, 
-           defense: Math.floor(Math.random() * 10) + 1
+           population: Math.floor(Math.random() * 100) + 10,
+           defense: Math.floor(Math.random() * 10) + 1,
+           economy: Math.floor(Math.random() * 100) + 10,
+           technology: Math.floor(Math.random() * 10) + 1,
          }
        };
     });

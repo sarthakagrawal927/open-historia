@@ -195,17 +195,7 @@ export default function Advisor({
     return (
       <button
         onClick={() => setOpen(true)}
-        className="
-          fixed bottom-36 right-4 z-40
-          w-12 h-12 rounded-full
-          bg-teal-700/90 hover:bg-teal-600
-          border border-teal-500/40
-          shadow-lg shadow-teal-900/40
-          backdrop-blur-md
-          flex items-center justify-center
-          transition-all duration-200 hover:scale-110
-          group
-        "
+        className="fixed bottom-36 right-4 z-40 w-12 h-12 rounded-full bg-teal-700/90 hover:bg-teal-600 border border-teal-500/40 shadow-lg shadow-teal-900/40 backdrop-blur-md flex items-center justify-center transition-all duration-200 hover:scale-110 group"
         aria-label="Open Strategic Advisor"
         title="Strategic Advisor"
       >
@@ -402,29 +392,14 @@ export default function Advisor({
                 onKeyDown={handleKeyDown}
                 disabled={processing}
                 rows={1}
-                className="
-                  flex-1 bg-slate-900/60 border border-slate-700/60
-                  rounded-lg px-3 py-2
-                  text-slate-200 text-[11px] placeholder-slate-600
-                  focus:border-teal-600 focus:ring-1 focus:ring-teal-600/30
-                  outline-none resize-none
-                  disabled:opacity-50
-                  scrollbar-thin scrollbar-thumb-slate-700
-                "
+                className="flex-1 bg-slate-900/60 border border-slate-700/60 rounded-lg px-3 py-2 text-slate-200 text-[11px] placeholder-slate-600 focus:border-teal-600 focus:ring-1 focus:ring-teal-600/30 outline-none resize-none disabled:opacity-50 scrollbar-thin scrollbar-thumb-slate-700"
                 placeholder="Ask your advisor..."
                 style={{ minHeight: "32px", maxHeight: "80px" }}
               />
               <button
                 onClick={handleSend}
                 disabled={!input.trim() || processing}
-                className="
-                  w-8 h-8 shrink-0
-                  flex items-center justify-center
-                  bg-teal-700/80 hover:bg-teal-600
-                  disabled:opacity-30 disabled:cursor-not-allowed
-                  text-white text-sm font-bold
-                  rounded-lg transition-colors
-                "
+                className="w-8 h-8 shrink-0 flex items-center justify-center bg-teal-700/80 hover:bg-teal-600 disabled:opacity-30 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg transition-colors"
                 aria-label="Send message"
               >
                 {"\u203A"}

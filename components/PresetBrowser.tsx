@@ -170,15 +170,7 @@ function PresetCard({ preset, index, onSelect }: PresetCardProps) {
     <button
       type="button"
       onClick={() => onSelect(preset)}
-      className={`
-        group relative flex flex-col text-left
-        bg-slate-900/80 border border-slate-700/60 rounded-xl
-        overflow-hidden cursor-pointer
-        transition-all duration-300 ease-out
-        hover:-translate-y-1.5 hover:border-amber-600/50 hover:shadow-lg hover:shadow-amber-900/20
-        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950
-        ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}
-      `}
+      className={`group relative flex flex-col text-left bg-slate-900/80 border border-slate-700/60 rounded-xl overflow-hidden cursor-pointer transition-all duration-300 ease-out hover:-translate-y-1.5 hover:border-amber-600/50 hover:shadow-lg hover:shadow-amber-900/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}
       style={{
         transitionProperty: "opacity, transform, border-color, box-shadow",
         transitionDuration: "500ms, 500ms, 300ms, 300ms",
@@ -322,11 +314,7 @@ export default function PresetBrowser({
         {/* Header                                                            */}
         {/* ----------------------------------------------------------------- */}
         <header
-          className={`
-            shrink-0 pt-10 sm:pt-14 pb-4 px-6 text-center select-none
-            transition-all duration-700 ease-out
-            ${headerVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-6"}
-          `}
+          className={`shrink-0 pt-10 sm:pt-14 pb-4 px-6 text-center select-none transition-all duration-700 ease-out ${headerVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-6"}`}
         >
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-serif font-bold tracking-wide text-amber-500 drop-shadow-lg">
             OPEN HISTORIA
@@ -342,11 +330,7 @@ export default function PresetBrowser({
         {/* Category tabs                                                     */}
         {/* ----------------------------------------------------------------- */}
         <nav
-          className={`
-            shrink-0 px-4 sm:px-6 pb-4
-            transition-all duration-600 ease-out
-            ${tabsVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}
-          `}
+          className={`shrink-0 px-4 sm:px-6 pb-4 transition-all duration-600 ease-out ${tabsVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}
         >
           <div className="flex items-center justify-center gap-1 sm:gap-2 flex-wrap">
             {tabs.map((tab) => {
@@ -357,16 +341,7 @@ export default function PresetBrowser({
                   type="button"
                   onClick={() => setActiveCategory(tab.id)}
                   title={tab.description}
-                  className={`
-                    relative px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold uppercase tracking-wider rounded-lg
-                    transition-all duration-250 ease-out
-                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500
-                    ${
-                      isActive
-                        ? "text-amber-300 bg-amber-900/30 border border-amber-700/50"
-                        : "text-slate-500 hover:text-slate-300 border border-transparent hover:border-slate-700/40 hover:bg-slate-800/30"
-                    }
-                  `}
+                  className={`relative px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold uppercase tracking-wider rounded-lg transition-all duration-250 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${isActive ? "text-amber-300 bg-amber-900/30 border border-amber-700/50" : "text-slate-500 hover:text-slate-300 border border-transparent hover:border-slate-700/40 hover:bg-slate-800/30"}`}
                 >
                   {tab.name}
                   {/* Active underline accent */}
@@ -417,11 +392,7 @@ export default function PresetBrowser({
         {/* Footer: Custom scenario button                                    */}
         {/* ----------------------------------------------------------------- */}
         <footer
-          className={`
-            shrink-0 px-6 pt-3 pb-8 flex flex-col items-center gap-3
-            transition-all duration-600 ease-out
-            ${footerVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}
-          `}
+          className={`shrink-0 px-6 pt-3 pb-8 flex flex-col items-center gap-3 transition-all duration-600 ease-out ${footerVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}
         >
           {/* Decorative rule */}
           <div className="w-64 h-px bg-gradient-to-r from-transparent via-slate-700 to-transparent mb-1" />
@@ -429,18 +400,7 @@ export default function PresetBrowser({
           <button
             type="button"
             onClick={onCustomScenario}
-            className="
-              group relative inline-flex items-center gap-3
-              px-8 py-3.5
-              text-sm sm:text-base font-bold uppercase tracking-widest
-              text-slate-400 hover:text-amber-300
-              border border-slate-700/60 hover:border-amber-600/50
-              rounded-xl
-              bg-slate-900/40 hover:bg-slate-900/70
-              transition-all duration-300 ease-out
-              hover:shadow-lg hover:shadow-amber-900/10
-              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950
-            "
+            className="group relative inline-flex items-center gap-3 px-8 py-3.5 text-sm sm:text-base font-bold uppercase tracking-widest text-slate-400 hover:text-amber-300 border border-slate-700/60 hover:border-amber-600/50 rounded-xl bg-slate-900/40 hover:bg-slate-900/70 transition-all duration-300 ease-out hover:shadow-lg hover:shadow-amber-900/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
           >
             {/* Pen icon */}
             <svg

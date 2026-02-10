@@ -12,6 +12,7 @@ interface GameSetupProps {
   onLoadSavedGame?: (saveId: string) => void;
   onDeleteSavedGame?: (saveId: string) => void;
   onRefreshSavedGames?: () => void;
+  preset?: { year: number; scenario: string; difficulty: string; suggestedNations: string[] } | null;
 }
 
 export type Provider = "google" | "openai" | "anthropic" | "deepseek";
@@ -23,7 +24,7 @@ export interface GameConfig {
   apiKey: string;
   provider: Provider;
   model: string;
-  difficulty: "Sandbox" | "Easy" | "Realistic" | "Hardcore";
+  difficulty: "Sandbox" | "Easy" | "Realistic" | "Hardcore" | "Impossible";
 }
 
 const MODELS: Record<Provider, { id: string; name: string }[]> = {
@@ -104,11 +105,12 @@ export default function GameSetup({
   onLoadSavedGame,
   onDeleteSavedGame,
   onRefreshSavedGames,
+  preset,
 }: GameSetupProps) {
-  const [year, setYear] = useState(2026);
-  const [scenario, setScenario] = useState("The global order is shifting. New alliances are forming...");
+  const [year, setYear] = useState(preset?.year ?? 2026);
+  const [scenario, setScenario] = useState(preset?.scenario ?? "The global order is shifting. New alliances are forming...");
   const [playerNationId, setPlayerNationId] = useState("");
-  
+
   const [provider, setProvider] = useState<Provider>(DEFAULT_PROVIDER);
   
   const [apiKey, setApiKey] = useState(() => loadProviderKey(DEFAULT_PROVIDER).apiKey);
@@ -116,7 +118,7 @@ export default function GameSetup({
   const [rememberKey, setRememberKey] = useState(() => loadProviderKey(DEFAULT_PROVIDER).remember);
 
   const [model, setModel] = useState(MODELS[DEFAULT_PROVIDER][0].id);
-  const [difficulty, setDifficulty] = useState<GameConfig["difficulty"]>("Realistic");
+  const [difficulty, setDifficulty] = useState<GameConfig["difficulty"]>((preset?.difficulty as GameConfig["difficulty"]) || "Realistic");
 
   const handleProviderChange = (newProvider: Provider) => {
     setProvider(newProvider);
@@ -255,6 +257,7 @@ export default function GameSetup({
                         <option value="Easy">Easy (Forgiving)</option>
                         <option value="Realistic">Realistic (Standard)</option>
                         <option value="Hardcore">Hardcore (Unforgiving)</option>
+                        <option value="Impossible">Impossible (Brutal)</option>
                     </select>
                 </div>
             </div>
