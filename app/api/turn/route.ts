@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
+import { buildGameMasterPrompt } from "@/lib/ai-prompts";
+
+// ---------------------------------------------------------------------------
+// Constants & Helpers
+// ---------------------------------------------------------------------------
 
 const DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview";
 const FALLBACK_GEMINI_MODELS = [
@@ -27,13 +32,27 @@ const isModelSelectionError = (error: unknown) => {
   );
 };
 
+// ---------------------------------------------------------------------------
+// Update types -- expanded to include "relation", "economy", and "crisis"
+// ---------------------------------------------------------------------------
+
 type ParsedUpdate =
   | { type: "owner"; provinceName: string; newOwnerId: string }
   | { type: "time"; amount: number }
-  | { type: "event"; description: string; eventType: "diplomacy" | "war" | "discovery" | "flavor"; year: number };
+  | { type: "event"; description: string; eventType: "diplomacy" | "war" | "discovery" | "flavor" | "economy" | "crisis"; year: number }
+  | { type: "relation"; nationA: string; nationB: string; relationType: string; reason: string };
 
-const normalizeEventType = (eventType: unknown): "diplomacy" | "war" | "discovery" | "flavor" => {
-  if (eventType === "diplomacy" || eventType === "war" || eventType === "discovery" || eventType === "flavor") {
+const normalizeEventType = (
+  eventType: unknown
+): "diplomacy" | "war" | "discovery" | "flavor" | "economy" | "crisis" => {
+  if (
+    eventType === "diplomacy" ||
+    eventType === "war" ||
+    eventType === "discovery" ||
+    eventType === "flavor" ||
+    eventType === "economy" ||
+    eventType === "crisis"
+  ) {
     return eventType;
   }
   return "flavor";
@@ -86,80 +105,48 @@ const sanitizeAiPayload = (
           year: Number.isFinite(rawYear) ? Math.trunc(rawYear) : fallbackYear,
         });
       }
+
+      if (
+        u.type === "relation" &&
+        typeof u.nationA === "string" &&
+        typeof u.nationB === "string" &&
+        typeof u.relationType === "string"
+      ) {
+        updates.push({
+          type: "relation",
+          nationA: u.nationA.trim(),
+          nationB: u.nationB.trim(),
+          relationType: u.relationType.trim(),
+          reason: typeof u.reason === "string" ? u.reason.trim() : "",
+        });
+      }
     });
   }
 
   return { message, updates };
 };
 
-const buildTurnPrompt = (args: {
-  command: string;
-  gameState: {
-    turn: number;
-    players: Record<string, { name: string }>;
-  };
-  config: {
-    scenario: string;
-    difficulty: string;
-  };
-  history?: Array<{ type?: string; text: string }>;
-  events?: Array<{ year: number; description: string }>;
-}) => {
-  const { command, gameState, config, history, events } = args;
-
-  return `
-You are the Game Master for a grand strategy simulation called "Open Historia".
-
-GAME CONTEXT
-- Scenario: ${config.scenario}
-- Year: ${gameState.turn}
-- Player Nation: ${gameState.players["player"].name}
-- Difficulty: ${config.difficulty}
-
-RECENT HISTORY
-${history ? history.map((h) => `[${h.type?.toUpperCase() || "INFO"}] ${h.text}`).join("\n") : "No history yet."}
-
-WORLD EVENTS MEMORY
-${events ? events.map((e) => `[Year ${e.year}] ${e.description}`).join("\n") : "No significant events yet."}
-
-PLAYER COMMAND
-"${command}"
-
-SIMULATION RULES
-1) Stay internally consistent with prior events, alliances, wars, and tone.
-2) If the command is diplomatic, roleplay as the target leader with strategic motives.
-3) If time advances, narrate consequences and include a "time" update.
-4) Only emit "owner" updates when control clearly changes.
-5) Emit "event" updates for major geopolitical developments.
-6) Keep response grounded and plausible for the selected difficulty.
-
-OUTPUT CONTRACT (STRICT JSON ONLY)
-Return one JSON object with this shape:
-{
-  "message": "2-6 sentence narrative response",
-  "updates": [
-    { "type": "owner", "provinceName": "Exact Name", "newOwnerId": "player|ai_id" },
-    { "type": "time", "amount": 1 },
-    { "type": "event", "description": "Event summary", "eventType": "war|diplomacy|discovery|flavor", "year": ${gameState.turn} }
-  ]
-}
-
-HARD CONSTRAINTS
-- No markdown.
-- No keys outside "message" and "updates".
-- If no state change, return "updates": [].
-`;
-};
+// ---------------------------------------------------------------------------
+// POST /api/turn
+// ---------------------------------------------------------------------------
 
 export async function POST(req: NextRequest) {
   try {
-    const { command, gameState, config, history, events } = await req.json();
+    const { command, gameState, config, history, events, relations, provinceSummary } = await req.json();
 
     if (!config.apiKey) {
       return NextResponse.json({ error: "API Key missing" }, { status: 400 });
     }
 
-    const systemPrompt = buildTurnPrompt({ command, gameState, config, history, events });
+    const systemPrompt = buildGameMasterPrompt({
+      command,
+      gameState,
+      config,
+      history,
+      events,
+      relations,
+      provinceSummary,
+    });
 
     let responseText = "";
 
@@ -212,11 +199,14 @@ export async function POST(req: NextRequest) {
       }
       case "openai": {
         const openai = new OpenAI({ apiKey: config.apiKey });
-        const isOSeries = config.model.startsWith('o');
+        const isOSeries = config.model.startsWith("o");
         const completion = await openai.chat.completions.create({
           messages: [{ role: isOSeries ? "user" : "system", content: systemPrompt }],
           model: config.model,
-          response_format: config.model.includes('gpt-4o') || config.model.includes('o3') ? { type: "json_object" } : undefined,
+          response_format:
+            config.model.includes("gpt-4o") || config.model.includes("o3")
+              ? { type: "json_object" }
+              : undefined,
         });
         responseText = completion.choices[0].message.content || "{}";
         break;
@@ -226,11 +216,12 @@ export async function POST(req: NextRequest) {
         const message = await anthropic.messages.create({
           model: config.model,
           max_tokens: 2048,
-          system: "You are a JSON-only response bot for a strategy game. Never explain your answer, only return JSON.",
+          system:
+            "You are a JSON-only response bot for a grand strategy game. Never explain your answer, only return valid JSON.",
           messages: [{ role: "user", content: systemPrompt }],
         });
-        if (message.content[0].type === 'text') {
-             responseText = message.content[0].text;
+        if (message.content[0].type === "text") {
+          responseText = message.content[0].text;
         }
         break;
       }
@@ -239,20 +230,23 @@ export async function POST(req: NextRequest) {
     }
 
     // Robust JSON cleaning
-    const cleanJson = responseText
+    const cleanJson =
+      responseText
         .replace(/```json/g, "")
         .replace(/```/g, "")
         .match(/(\{[\s\S]*\})/)?.[1] || responseText.trim();
-        
+
     const parsed = JSON.parse(cleanJson);
     const sanitized = sanitizeAiPayload(parsed, gameState.turn);
     return NextResponse.json(sanitized);
-
   } catch (error) {
     console.error("AI Error:", error);
-    return NextResponse.json({ 
-        message: `The Game Master encountered an error: ${error instanceof Error ? error.message : "Internal Server Error"}`, 
-        updates: [] 
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        message: `The Game Master encountered an error: ${error instanceof Error ? error.message : "Internal Server Error"}`,
+        updates: [],
+      },
+      { status: 500 }
+    );
   }
 }
