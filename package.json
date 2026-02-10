@@ -12,6 +12,7 @@
     "@anthropic-ai/sdk": "^0.74.0",
     "@google/generative-ai": "^0.24.1",
     "@types/d3-geo": "^3.1.0",
+    "@types/three": "^0.182.0",
     "@types/topojson-client": "^3.1.5",
     "d3-delaunay": "^6.0.4",
     "d3-geo": "^3.1.1",
@@ -19,6 +20,7 @@
     "openai": "^6.18.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "three": "^0.182.0",
     "topojson-client": "^3.1.0"
   },
   "devDependencies": {
