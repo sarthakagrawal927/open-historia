@@ -10,7 +10,16 @@
       "Bash(gemini skills --help:*)",
       "Bash(gemini skills:*)",
       "Bash(chmod:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "WebSearch",
+      "WebFetch(domain:wiki.paxhistoria.co)",
+      "WebFetch(domain:paxhistoria.fandom.com)",
+      "WebFetch(domain:www.ycombinator.com)",
+      "WebFetch(domain:grokipedia.com)",
+      "WebFetch(domain:www.oreateai.com)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx next build:*)"
     ]
   }
 }
