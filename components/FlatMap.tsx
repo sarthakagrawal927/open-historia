@@ -425,7 +425,7 @@ export default function FlatMap({
       canvas.style.height = `${h}px`;
 
       // Min zoom = 1 since projection already fills viewport
-      const minZoom = 1;
+      const minZoom = 0.5;
       const cam = cameraRef.current;
       if (cam.zoom < minZoom) {
         cam.zoom = minZoom;
@@ -874,7 +874,7 @@ export default function FlatMap({
 
       const cam = cameraRef.current;
       const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-      const minZoom = 1;
+      const minZoom = 0.5;
       const maxZoom = 15;
 
       const newZoom = clamp(cam.targetZoom * zoomFactor, minZoom, maxZoom);
