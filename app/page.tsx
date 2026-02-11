@@ -250,8 +250,16 @@ export default function GamePage() {
       fullCommand = `No new orders. ${timeCmd}. Describe what happens in the world.`;
     }
 
-    // Player-controlled time: advance the year
-    setGameState((prev) => prev ? { ...prev, turn: prev.turn + 1 } : null);
+    // Player-controlled time: advance based on selected time step
+    // Default is 1 month. Only advance full year if explicitly set to 1y.
+    const yearDelta =
+      period === "5d" ? 0 :
+      period === "1m" ? 0 :
+      period === "6m" ? 0 :
+      period === "1y" ? 1 : 0;
+    if (yearDelta > 0) {
+      setGameState((prev) => prev ? { ...prev, turn: prev.turn + yearDelta } : null);
+    }
     setPendingOrders([]);
     processCommand(fullCommand);
   };
@@ -279,9 +287,9 @@ export default function GamePage() {
             provinces: provinceSummary,
           },
           config: gameConfig,
-          history: logs.slice(-25),
-          events: events.slice(-10),
-          relations: relations.slice(-20),
+          history: logs.slice(-30),
+          events: events.slice(-50),
+          relations,
           provinceSummary,
         }),
       });
