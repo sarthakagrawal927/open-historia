@@ -202,6 +202,7 @@ export async function POST(req: NextRequest) {
       relations,
       history,
       config,
+      promptOverrides,
     } = body as {
       question: string;
       playerNation: string;
@@ -210,6 +211,7 @@ export async function POST(req: NextRequest) {
       relations?: Array<{ nationA: string; nationB: string; type: string }>;
       history?: Array<{ content: string; role: string }>;
       config: { provider: string; apiKey: string; model: string };
+      promptOverrides?: Record<string, string>;
     };
 
     // --- Validation ---
@@ -234,6 +236,7 @@ export async function POST(req: NextRequest) {
       recentEvents: recentEvents || [],
       relations: relations || [],
       history: history || [],
+      promptOverrides,
     });
 
     // --- Call AI ---

@@ -236,8 +236,8 @@ export default function Timeline({
 
       {/* Main bar */}
       <div
-        className={`bg-slate-950/90 border-t border-slate-700 backdrop-blur-md transition-all duration-300 ease-in-out overflow-hidden ${
-          collapsed ? "max-h-0 border-t-0" : "max-h-[130px]"
+        className={`bg-slate-950/90 border-t border-slate-700 backdrop-blur-md transition-all duration-300 ease-in-out ${
+          collapsed ? "h-0 border-t-0 pointer-events-none opacity-0" : "h-[120px]"
         }`}
       >
         {snapshots.length === 0 ? (
@@ -247,7 +247,7 @@ export default function Timeline({
         ) : (
           <div
             ref={scrollRef}
-            className="overflow-x-auto overflow-y-hidden cursor-grab"
+            className="overflow-x-auto overflow-y-visible cursor-grab"
             style={{ height: "120px" }}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}

@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { PRESETS, PRESET_CATEGORIES, getPresetsByCategory } from "@/lib/presets";
 import type { Preset } from "@/lib/types";
+import type { SavedGame } from "@/lib/game-storage";
+import SavedGamesList from "./SavedGamesList";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -10,6 +12,10 @@ import type { Preset } from "@/lib/types";
 interface PresetBrowserProps {
   onSelectPreset: (preset: Preset) => void;
   onCustomScenario: () => void;
+  savedGames?: SavedGame[];
+  onLoadSavedGame?: (saveId: string) => void;
+  onDeleteSavedGame?: (saveId: string) => void;
+  getNationName?: (id: string) => string;
 }
 
 // ---------------------------------------------------------------------------
@@ -254,6 +260,10 @@ function PresetCard({ preset, index, onSelect }: PresetCardProps) {
 export default function PresetBrowser({
   onSelectPreset,
   onCustomScenario,
+  savedGames,
+  onLoadSavedGame,
+  onDeleteSavedGame,
+  getNationName,
 }: PresetBrowserProps) {
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [headerVisible, setHeaderVisible] = useState(false);
@@ -394,6 +404,18 @@ export default function PresetBrowser({
         <footer
           className={`shrink-0 px-6 pt-3 pb-8 flex flex-col items-center gap-3 transition-all duration-600 ease-out ${footerVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}
         >
+          {/* Saved games */}
+          {savedGames && savedGames.length > 0 && onLoadSavedGame && onDeleteSavedGame && (
+            <div className="w-full mb-4">
+              <SavedGamesList
+                savedGames={savedGames}
+                onLoad={onLoadSavedGame}
+                onDelete={onDeleteSavedGame}
+                getNationName={getNationName}
+              />
+            </div>
+          )}
+
           {/* Decorative rule */}
           <div className="w-64 h-px bg-gradient-to-r from-transparent via-slate-700 to-transparent mb-1" />
 

@@ -194,6 +194,7 @@ export async function POST(req: NextRequest) {
       relations,
       recentEvents,
       config,
+      promptOverrides,
     } = body as {
       message: string;
       playerNation: string;
@@ -203,6 +204,7 @@ export async function POST(req: NextRequest) {
       relations?: { type: string; treaties: string[] } | null;
       recentEvents?: Array<{ year: number; description: string }>;
       config: { provider: string; apiKey: string; model: string };
+      promptOverrides?: Record<string, string>;
     };
 
     // --- Validation ---
@@ -228,6 +230,7 @@ export async function POST(req: NextRequest) {
       gameContext: gameContext || { year: 2026, scenario: "", difficulty: "Realistic" },
       relations: relations || null,
       recentEvents: recentEvents || [],
+      promptOverrides,
     });
 
     // --- Call AI ---

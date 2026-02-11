@@ -62,10 +62,11 @@ const normalizeEventType = (
 const sanitizeAiPayload = (
   payload: unknown,
   fallbackYear: number
-): { message: string; updates: ParsedUpdate[] } => {
+): { message: string; updates: ParsedUpdate[]; storySoFar?: string } => {
   const safePayload = (payload && typeof payload === "object" ? payload : {}) as {
     message?: unknown;
     updates?: unknown;
+    storySoFar?: unknown;
   };
 
   const message =
@@ -124,7 +125,11 @@ const sanitizeAiPayload = (
     });
   }
 
-  return { message, updates };
+  const storySoFar = typeof safePayload.storySoFar === "string" && safePayload.storySoFar.trim()
+    ? safePayload.storySoFar.trim()
+    : undefined;
+
+  return { message, updates, storySoFar };
 };
 
 // ---------------------------------------------------------------------------
@@ -133,7 +138,7 @@ const sanitizeAiPayload = (
 
 export async function POST(req: NextRequest) {
   try {
-    const { command, gameState, config, history, events, relations, provinceSummary } = await req.json();
+    const { command, gameState, config, history, events, relations, provinceSummary, storySoFar, promptOverrides } = await req.json();
 
     if (config.provider !== "local" && !config.apiKey) {
       return NextResponse.json({ error: "API Key missing" }, { status: 400 });
@@ -147,6 +152,8 @@ export async function POST(req: NextRequest) {
       events,
       relations,
       provinceSummary,
+      storySoFar,
+      promptOverrides,
     });
 
     let responseText = "";

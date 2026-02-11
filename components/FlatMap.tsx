@@ -2,7 +2,9 @@
 
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import * as d3 from "d3-geo";
+import * as topojson from "topojson-client";
 import { Province, Player, MapTheme, DiplomaticRelation } from "@/lib/types";
+import { WORLD_CITIES } from "@/lib/cities";
 import Tooltip from "./Tooltip";
 
 // ---------------------------------------------------------------------------
@@ -204,7 +206,11 @@ export default function FlatMap({
   const pathCacheRef = useRef<Map<string | number, Path2D>>(new Map());
 
   const cameraRef = useRef<CameraState>({ x: 0, y: 0, zoom: 1, targetX: 0, targetY: 0, targetZoom: 1 });
+  const minZoomRef = useRef(1);
+  // Projected bounds of the map in projection-space coordinates (set by buildProjectionAndCache)
+  const mapBoundsRef = useRef({ left: 0, top: 0, right: 1920, bottom: 1080 });
   const hoverRef = useRef<HoverState>({ provinceId: null, brightness: 0, targetBrightness: 0 });
+  const stateLinesPathRef = useRef<Path2D | null>(null);
   const acquisitionsRef = useRef<AcquisitionAnim[]>([]);
   const prevOwnersRef = useRef<Map<string | number, string | null>>(new Map());
   const rafIdRef = useRef<number>(0);
@@ -244,10 +250,29 @@ export default function FlatMap({
     const w = sizeRef.current.width;
     const h = sizeRef.current.height;
 
-    // Base scale: fit the map comfortably — user can zoom in/out freely
+    // "Cover" mode: map fills viewport completely, no empty space visible.
+    // Step 1: fitSize gives "contain" (map fits INSIDE viewport).
     const projection = d3.geoNaturalEarth1()
-      .scale(200)
-      .translate([w / 2, h / 2]);
+      .fitSize([w, h], { type: "Sphere" } as d3.GeoPermissibleObjects);
+    // Step 2: scale up so map COVERS viewport (may crop edges of map).
+    const tempPath = d3.geoPath(projection);
+    const [[bx0, by0], [bx1, by1]] = tempPath.bounds({ type: "Sphere" } as d3.GeoPermissibleObjects);
+    const containedW = bx1 - bx0;
+    const containedH = by1 - by0;
+    const coverFactor = Math.max(w / containedW, h / containedH);
+    // Shift up slightly: most land mass is in the northern hemisphere,
+    // so centering the equator vertically leaves too much ocean at the bottom.
+    projection.scale((projection.scale() ?? 1) * coverFactor).translate([w / 2, h / 2 + h * 0.06]);
+
+    // Store actual projected map bounds (centered at w/2, h/2 after cover)
+    const projW = containedW * coverFactor;
+    const projH = containedH * coverFactor;
+    mapBoundsRef.current = {
+      left: w / 2 - projW / 2,
+      top: h / 2 - projH / 2,
+      right: w / 2 + projW / 2,
+      bottom: h / 2 + projH / 2,
+    };
 
     projectionRef.current = projection;
 
@@ -273,6 +298,35 @@ export default function FlatMap({
   useEffect(() => {
     buildProjectionAndCache();
   }, [provinces, buildProjectionAndCache]);
+
+  // Load sub-national state boundary lines
+  const stateGeoJsonRef = useRef<d3.GeoPermissibleObjects | null>(null);
+
+  const rebuildStateLines = useCallback(() => {
+    const svgPath = pathGeneratorRef.current;
+    const geojson = stateGeoJsonRef.current;
+    if (!svgPath || !geojson) return;
+    const pathStr = svgPath(geojson);
+    if (pathStr) stateLinesPathRef.current = new Path2D(pathStr);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/states-110m.json")
+      .then((r) => r.json())
+      .then((topo) => {
+        if (cancelled) return;
+        stateGeoJsonRef.current = topojson.feature(topo, topo.objects.states) as unknown as d3.GeoPermissibleObjects;
+        rebuildStateLines();
+      })
+      .catch(() => { /* state lines are optional decoration */ });
+    return () => { cancelled = true; };
+  }, [rebuildStateLines]);
+
+  // Rebuild state lines when projection changes
+  useEffect(() => {
+    rebuildStateLines();
+  }, [provinces, buildProjectionAndCache, rebuildStateLines]);
 
   // ---------------------------------------------------------------------------
   // Track Previous Owners & Detect Acquisitions
@@ -423,12 +477,12 @@ export default function FlatMap({
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
 
-      // On first load, set camera zoom to fill viewport with the map
+      // Map fills viewport at zoom=1 via fitSize. Min zoom=1 means no zoom-out past full map.
       const cam = cameraRef.current;
-      const idealZoom = Math.max(w / 960, h / 500);
+      minZoomRef.current = 1;
       if (cam.zoom === 1 && cam.targetZoom === 1 && cam.x === 0 && cam.y === 0) {
-        cam.zoom = idealZoom;
-        cam.targetZoom = idealZoom;
+        cam.zoom = 1;
+        cam.targetZoom = 1;
       }
 
       buildProjectionAndCache();
@@ -470,9 +524,29 @@ export default function FlatMap({
 
       // ---- Smooth camera interpolation ----
       const camSpeed = 1 - Math.pow(0.001, dt);
+      // Hard-clamp targetZoom (safety net in case any code path bypasses wheel clamp)
+      cam.targetZoom = Math.max(minZoomRef.current, cam.targetZoom);
       cam.x = lerp(cam.x, cam.targetX, camSpeed);
       cam.y = lerp(cam.y, cam.targetY, camSpeed);
       cam.zoom = lerp(cam.zoom, cam.targetZoom, camSpeed);
+
+      // ---- Clamp camera pan so map always covers viewport ----
+      // A projection-space point P appears at screen: cam.x + P * zoom
+      // Map left edge must be <= 0:  cam.x + mb.left * zoom <= 0
+      // Map right edge must be >= w: cam.x + mb.right * zoom >= w
+      const mb = mapBoundsRef.current;
+      const clampCam = (cx: number, cy: number, z: number) => ({
+        x: clamp(cx, w - mb.right * z, -mb.left * z),
+        y: clamp(cy, h - mb.bottom * z, -mb.top * z),
+      });
+      // Clamp targets using targetZoom (prevents drift during lerp)
+      const ct = clampCam(cam.targetX, cam.targetY, cam.targetZoom);
+      cam.targetX = ct.x;
+      cam.targetY = ct.y;
+      // Clamp current position using current zoom
+      const cc = clampCam(cam.x, cam.y, cam.zoom);
+      cam.x = cc.x;
+      cam.y = cc.y;
 
       // ---- Smooth hover brightness ----
       const hoverSpeed = 1 - Math.pow(0.00001, dt); // ~100ms transition
@@ -627,6 +701,14 @@ export default function FlatMap({
         }
       }
 
+      // ---- 3b. Sub-national State Boundaries (visible when zoomed in) ----
+      if (stateLinesPathRef.current && cam.zoom >= 1.5) {
+        const stateAlpha = Math.min(0.4, (cam.zoom - 1.5) * 0.3);
+        ctx.strokeStyle = `rgba(255,255,255,${stateAlpha.toFixed(3)})`;
+        ctx.lineWidth = 0.3 / cam.zoom;
+        ctx.stroke(stateLinesPathRef.current);
+      }
+
       // ---- 4. War Zone Borders (pulsing red) ----
       if (warPairs.size > 0) {
         const warPulse = Math.sin(now * 0.003) * 0.5 + 0.5;
@@ -751,9 +833,9 @@ export default function FlatMap({
 
           const isPlayer = p.ownerId === "player";
 
-          // Font size scales with importance (sqrt of population) and inversely with zoom
+          // Font size scales with importance AND with zoom (text grows when zoomed in)
           const baseSize = Math.max(6, Math.min(14, 4 + Math.sqrt(pop) * 0.8));
-          const fontSize = baseSize / cam.zoom;
+          const fontSize = baseSize / Math.pow(cam.zoom, 0.65);
 
           // Fade in labels as zoom approaches their threshold
           const fadeRange = 0.3;
@@ -766,7 +848,7 @@ export default function FlatMap({
           ctx.font = `${isPlayer ? "bold " : "bold "}${fontSize}px sans-serif`;
 
           // Text stroke (outline) for readability — dark outline
-          ctx.lineWidth = 2.5 / cam.zoom;
+          ctx.lineWidth = 2.5 / Math.pow(cam.zoom, 0.65);
           ctx.lineJoin = "round";
           ctx.strokeStyle = "rgba(0,0,0,0.8)";
           ctx.globalAlpha = fadeAlpha;
@@ -791,17 +873,62 @@ export default function FlatMap({
         }
       }
 
+      // ---- 9. City / Landmark Labels (zoom-tiered) ----
+      {
+        // tier 1: zoom >= 2, tier 2: zoom >= 3, tier 3: zoom >= 5, tier 4: zoom >= 8
+        const tierMinZoom = [0, 2, 3, 5, 8];
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+
+        for (let i = 0; i < WORLD_CITIES.length; i++) {
+          const city = WORLD_CITIES[i];
+          const reqZoom = tierMinZoom[city.tier];
+          if (cam.zoom < reqZoom) continue;
+
+          const proj = projection([city.lon, city.lat]);
+          if (!proj) continue;
+
+          const fadeRange = 0.5;
+          const fadeAlpha = Math.min(1, (cam.zoom - reqZoom) / fadeRange);
+          if (fadeAlpha <= 0) continue;
+
+          const cityBase = city.tier === 1 ? 9 : city.tier === 2 ? 7.5 : city.tier === 3 ? 6 : 5;
+          const fontSize = Math.max(3, cityBase / Math.pow(cam.zoom, 0.65));
+          const dotR = Math.max(0.5, 1.2 / Math.pow(cam.zoom, 0.65));
+
+          ctx.save();
+          ctx.globalAlpha = fadeAlpha * 0.9;
+
+          // Dot
+          ctx.fillStyle = "#fbbf24";
+          ctx.beginPath();
+          ctx.arc(proj[0], proj[1], dotR, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Label
+          ctx.font = `${fontSize}px sans-serif`;
+          ctx.strokeStyle = "rgba(0,0,0,0.85)";
+          ctx.lineWidth = 2 / Math.pow(cam.zoom, 0.65);
+          ctx.lineJoin = "round";
+          ctx.strokeText(city.name, proj[0] + dotR * 2, proj[1]);
+          ctx.fillStyle = "#fde68a";
+          ctx.fillText(city.name, proj[0] + dotR * 2, proj[1]);
+
+          ctx.restore();
+        }
+      }
+
       // Restore (un-camera)
       ctx.restore();
 
-      // ---- 9. Vignette Overlay (post-camera, in screen space) ----
+      // ---- 10. Vignette Overlay (post-camera, in screen space) ----
       const vignetteGrad = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.3, w / 2, h / 2, Math.max(w, h) * 0.75);
       vignetteGrad.addColorStop(0, "rgba(0,0,0,0)");
       vignetteGrad.addColorStop(1, "rgba(0,0,0,0.4)");
       ctx.fillStyle = vignetteGrad;
       ctx.fillRect(0, 0, w, h);
 
-      // ---- 10. Canvas Hover Label (near mouse, rendered on canvas) ----
+      // ---- 11. Canvas Hover Label (near mouse, rendered on canvas) ----
       if (hover.provinceId !== null && hover.brightness > 0.1) {
         const hovProv = provs.find((p) => p.id === hover.provinceId);
         if (hovProv) {
@@ -873,7 +1000,7 @@ export default function FlatMap({
 
       const cam = cameraRef.current;
       const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-      const minZoom = 0.3;
+      const minZoom = minZoomRef.current;
       const maxZoom = 15;
 
       const newZoom = clamp(cam.targetZoom * zoomFactor, minZoom, maxZoom);

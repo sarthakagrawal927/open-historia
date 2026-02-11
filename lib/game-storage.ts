@@ -29,6 +29,7 @@ export interface SavedGame {
   gameConfig: GameConfig;
   logs: LogEntry[];
   events: GameEvent[];
+  storySoFar?: string;
   version: string;
 }
 
@@ -92,7 +93,8 @@ export function saveGame(
   gameConfig: GameConfig,
   logs: LogEntry[],
   saveName?: string,
-  events: GameEvent[] = []
+  events: GameEvent[] = [],
+  storySoFar?: string
 ): string {
   try {
     const saves = listSavedGames();
@@ -106,6 +108,7 @@ export function saveGame(
       gameConfig,
       logs: logs.slice(-50),
       events: events.slice(-100),
+      storySoFar,
       version: VERSION,
     };
 
@@ -147,6 +150,7 @@ export function listSavedGames(): SavedGame[] {
         gameConfig: save.gameConfig as GameConfig,
         logs: Array.isArray(save.logs) ? (save.logs as LogEntry[]) : [],
         events: Array.isArray(save.events) ? (save.events as GameEvent[]) : [],
+        storySoFar: typeof save.storySoFar === "string" ? save.storySoFar : undefined,
         version: typeof save.version === "string" ? save.version : "1.0.0",
       }));
 
@@ -190,7 +194,9 @@ export function autoSave(
   gameConfig: GameConfig,
   logs: LogEntry[],
   events: GameEvent[],
-  delay: number = 2000
+  delay: number = 2000,
+  saveName: string = "autosave",
+  storySoFar?: string
 ): void {
   if (autoSaveTimer) {
     clearTimeout(autoSaveTimer);
@@ -198,7 +204,7 @@ export function autoSave(
 
   autoSaveTimer = setTimeout(() => {
     try {
-      saveGame(gameState, gameConfig, logs, "autosave", events);
+      saveGame(gameState, gameConfig, logs, saveName, events, storySoFar);
     } catch (error) {
       console.error("Auto-save failed:", error);
     }

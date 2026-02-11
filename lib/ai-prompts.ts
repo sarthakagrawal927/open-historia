@@ -1,6 +1,8 @@
 // Open Historia -- AI Prompt Templates
 // All prompts return strict JSON for deterministic parsing.
 
+import type { PromptOverrides } from "@/components/PromptSettings";
+
 const DIFFICULTY_PROFILES: Record<string, string> = {
   Sandbox: `SANDBOX: Almost everything succeeds. AI nations are cooperative and easily persuaded. Consequences mild. Reward bold creativity. Tone: lighthearted, permissive.`,
   Easy: `EASY: Actions succeed with basic reasoning. AI is accommodating, alliances form readily. Mistakes cost setbacks, not collapse. Gently correct implausible actions.`,
@@ -56,6 +58,27 @@ function buildGeopoliticalContext(year: number): string {
   return `FUTURE (2025+): Multipolar disorder -- no single hegemon. AI revolution transforms economies and warfare. Climate migration displaces hundreds of millions. Space militarization and resource competition. Hypersonic weapons undermine missile defense. Autonomous weapons systems. Cyber attacks on critical infrastructure. De-dollarization via BRICS+ alternatives. Aging societies (Japan, Europe, China) vs. youth bulges (Africa, South Asia). Synthetic biology and bioweapons risk. No international AI governance framework.`;
 }
 
+// ---------------------------------------------------------------------------
+// Default prompt fragments (editable via Settings panel)
+// ---------------------------------------------------------------------------
+
+const GM_DEFAULT_PREAMBLE = `You are the GAME MASTER of "Open Historia", a grand strategy simulation. You simulate the world -- adjudicating actions, voicing nations, and driving consequences. The world is alive: nations pursue their own agendas independently of the player.`;
+
+const GM_DEFAULT_RULES = `- Military: assess balance realistically (army size, tech, terrain, supply, morale, alliances). Wars take time -- report progress, not instant victory. Other nations REACT to military moves. LARGE NATIONS (China, Russia, USA, India, Brazil, etc.) CANNOT be conquered in a single action — require multi-step regional campaigns over many turns. Narrate partial territorial gains, resistance, and ongoing fronts.
+- Diplomacy: roleplay as target nation's leader with their own personality, fears, interests, and leverage. Treaties need mutual benefit. Historical grievances and cultural alignment matter.
+- Political: coups need military/intelligence groundwork. Sanctions take months to bite. Espionage can fail catastrophically. Domestic politics constrain leaders.
+- Economy: has inertia. Infrastructure takes years. Resource and geographic constraints apply. Spillover effects on trade partners.
+- Impossible actions: reject with wry narrative. Implausible actions: narrate the realistic failure. Well-planned actions: succeed proportionally to quality and difficulty.
+- DO NOT advance time -- the player controls the clock. Never emit "time" updates.`;
+
+const DIPLOMACY_DEFAULT = `Before responding, consider: What does the target nation WANT? What does it FEAR? What LEVERAGE does it have? Respond from the nation's authentic interests, culture, and strategic position. Match formality/style to the era (medieval king vs. modern president). Advance your own agenda -- propose counter-offers, make demands.
+
+Only change relations for SIGNIFICANT shifts (treaty agreed, threat made, trust broken) -- not minor pleasantries.`;
+
+const ADVISOR_DEFAULT = `You are the Grand Advisor to the ruler. Loyal, blunt, strategically brilliant. Address the ruler appropriately for the era ("my liege", "your majesty", "sir/madam", etc.).
+
+Think in terms of grand strategy across military, diplomatic, economic, and domestic dimensions. Consider second-order effects ("if we do X, then Y happens, making Z possible"). Reference specific nations and events. Give concrete, actionable recommendations.`;
+
 // 1. GAME MASTER TURN PROMPT
 export function buildGameMasterPrompt(args: {
   command: string;
@@ -65,32 +88,40 @@ export function buildGameMasterPrompt(args: {
   events?: Array<{ year: number; description: string; type: string }>;
   relations?: Array<{ nationA: string; nationB: string; type: string; treaties: string[] }>;
   provinceSummary?: Array<{ name: string; ownerId: string | null }>;
+  storySoFar?: string;
+  promptOverrides?: Partial<PromptOverrides>;
 }): string {
-  const { command, gameState, config, history, events, relations, provinceSummary } = args;
+  const { command, gameState, config, history, events, relations, provinceSummary, storySoFar, promptOverrides } = args;
   const playerNation = gameState.players["player"]?.name ?? "Unknown";
 
-  return `You are the GAME MASTER of "Open Historia", a grand strategy simulation. You simulate the world -- adjudicating actions, voicing nations, and driving consequences. The world is alive: nations pursue their own agendas independently of the player.
+  const overrides = {
+    gameMasterPreamble: promptOverrides?.gameMasterPreamble ?? GM_DEFAULT_PREAMBLE,
+    adjudicationRules: promptOverrides?.adjudicationRules ?? GM_DEFAULT_RULES,
+  };
+
+  const storyBlock = storySoFar
+    ? `STORY SO FAR (compressed history of this entire game — this is your primary memory):\n${storySoFar}`
+    : "STORY SO FAR: Game just started. No prior history.";
+
+  return `${overrides.gameMasterPreamble}
 
 SCENARIO: ${config.scenario}
 ERA: ${buildGeopoliticalContext(gameState.turn)}
 YEAR: ${gameState.turn} | PLAYER: ${playerNation}
 ${DIFFICULTY_PROFILES[config.difficulty] || DIFFICULTY_PROFILES["Realistic"]}
 
-RELATIONS: ${formatRelations(relations)}
+${storyBlock}
+
+CURRENT RELATIONS: ${formatRelations(relations)}
 TERRITORY: ${formatProvinces(provinceSummary)}
-PRIOR EVENTS (maintain consistency): ${formatEvents(events)}
-RECENT HISTORY:
+RECENT EVENTS: ${formatEvents(events)}
+RECENT COMMANDS:
 ${formatHistory(history)}
 
 PLAYER COMMAND: "${command}"
 
 ADJUDICATION RULES:
-- Military: assess balance realistically (army size, tech, terrain, supply, morale, alliances). Wars take time -- report progress, not instant victory. Other nations REACT to military moves.
-- Diplomacy: roleplay as target nation's leader with their own personality, fears, interests, and leverage. Treaties need mutual benefit. Historical grievances and cultural alignment matter.
-- Political: coups need military/intelligence groundwork. Sanctions take months to bite. Espionage can fail catastrophically. Domestic politics constrain leaders.
-- Economy: has inertia. Infrastructure takes years. Resource and geographic constraints apply. Spillover effects on trade partners.
-- Impossible actions: reject with wry narrative. Implausible actions: narrate the realistic failure. Well-planned actions: succeed proportionally to quality and difficulty.
-- DO NOT advance time -- the player controls the clock. Never emit "time" updates.
+${overrides.adjudicationRules}
 
 RELATION TYPES: neutral, friendly, allied, hostile, war, vassal.
 
@@ -101,9 +132,10 @@ OUTPUT: Return EXACTLY one raw JSON object. No markdown fences. No text outside 
     { "type": "owner", "provinceName": "EXACT province name from territory list", "newOwnerId": "player or ai_id" },
     { "type": "event", "description": "Concise event for the log", "eventType": "war|diplomacy|discovery|flavor|economy|crisis", "year": ${gameState.turn} },
     { "type": "relation", "nationA": "Nation Name", "nationB": "Nation Name", "relationType": "neutral|friendly|allied|hostile|war|vassal", "reason": "Brief reason" }
-  ]
+  ],
+  "storySoFar": "Updated compressed narrative of the ENTIRE game so far (max 500 words). Include: all wars and their outcomes, all alliances/treaties, territory changes, major diplomatic shifts, ongoing conflicts, economic developments, and the player's strategic arc. This is your memory — anything not included here will be forgotten. Append new developments to the existing story, don't rewrite from scratch."
 }
-Only include updates that actually occur. Empty updates = []. Include an "event" for anything noteworthy. provinceName MUST match exactly.`;
+Only include updates that actually occur. Empty updates = []. Include an "event" for anything noteworthy. provinceName MUST match exactly. ALWAYS include "storySoFar" — this is critical for continuity.`;
 }
 
 // 2. DIPLOMACY CHAT PROMPT
@@ -115,8 +147,9 @@ export function buildDiplomacyPrompt(args: {
   gameContext: { year: number; scenario: string; difficulty: string };
   relations?: { type: string; treaties: string[] } | null;
   recentEvents?: Array<{ year: number; description: string }>;
+  promptOverrides?: Partial<PromptOverrides>;
 }): string {
-  const { playerNation, targetNation, message, chatHistory, gameContext, relations, recentEvents } = args;
+  const { playerNation, targetNation, message, chatHistory, gameContext, relations, recentEvents, promptOverrides } = args;
 
   const historyBlock = chatHistory.length > 0
     ? chatHistory.map((m) => `[${m.turnYear}] ${m.sender}: ${m.content}`).join("\n")
@@ -137,9 +170,7 @@ ${historyBlock}
 
 ${playerNation}: "${message}"
 
-Before responding, consider: What does ${targetNation} WANT? What does it FEAR? What LEVERAGE does it have? Respond from ${targetNation}'s authentic interests, culture, and strategic position. Match formality/style to the era (medieval king vs. modern president). Advance your own agenda -- propose counter-offers, make demands.
-
-Only change relations for SIGNIFICANT shifts (treaty agreed, threat made, trust broken) -- not minor pleasantries.
+${promptOverrides?.diplomacyInstructions ?? DIPLOMACY_DEFAULT}
 
 OUTPUT: Raw JSON only, no markdown fences.
 {
@@ -158,16 +189,18 @@ export function buildAdvisorPrompt(args: {
   recentEvents?: Array<{ year: number; description: string }>;
   relations?: Array<{ nationA: string; nationB: string; type: string }>;
   history?: Array<{ content: string; role: string }>;
+  promptOverrides?: Partial<PromptOverrides>;
 }): string {
-  const { question, playerNation, gameContext, recentEvents, relations, history } = args;
+  const { question, playerNation, gameContext, recentEvents, relations, history, promptOverrides } = args;
 
   const evts = recentEvents?.length ? recentEvents.map((e) => `[${e.year}] ${e.description}`).join("; ") : "None";
   const rels = relations?.length ? relations.map((r) => `${r.nationA}<->${r.nationB}: ${r.type}`).join("; ") : "None";
   const conv = history?.length ? history.slice(-6).map((h) => `[${h.role === "user" ? "RULER" : "ADVISOR"}] ${h.content}`).join("\n") : "New session.";
 
-  return `You are the Grand Advisor to ${playerNation}'s ruler. Loyal, blunt, strategically brilliant. Address the ruler appropriately for the era ("my liege", "your majesty", "sir/madam", etc.).
+  return `${promptOverrides?.advisorPersonality ?? ADVISOR_DEFAULT}
 
 Context: ${gameContext.scenario} | Year ${gameContext.year} | ${gameContext.difficulty}
+Nation: ${playerNation}
 Relations: ${rels}
 Events: ${evts}
 
@@ -175,8 +208,6 @@ Prior conversation:
 ${conv}
 
 Ruler asks: "${question}"
-
-Think in terms of grand strategy across military, diplomatic, economic, and domestic dimensions. Consider second-order effects ("if we do X, then Y happens, making Z possible"). Reference specific nations and events. Give concrete, actionable recommendations.
 
 OUTPUT: Raw JSON only, no markdown fences.
 {

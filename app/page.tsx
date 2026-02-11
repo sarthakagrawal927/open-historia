@@ -8,6 +8,7 @@ import DiplomacyChat from "@/components/DiplomacyChat";
 import Timeline from "@/components/Timeline";
 import Advisor from "@/components/Advisor";
 import PresetBrowser from "@/components/PresetBrowser";
+import PromptSettings, { loadPromptOverrides } from "@/components/PromptSettings";
 import { loadWorldData } from "@/lib/world-loader";
 import { INITIAL_PLAYERS } from "@/lib/map-generator";
 import {
@@ -61,6 +62,9 @@ export default function GamePage() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [events, setEvents] = useState<GameEvent[]>([]);
 
+  // ── Compressed Context (running story summary updated by AI each turn) ──
+  const [storySoFar, setStorySoFar] = useState("");
+
   // ── Flow State ──────────────────────────────────────────────────────────
   const [showPresets, setShowPresets] = useState(true);
   const [selectedPreset, setSelectedPreset] = useState<Preset | null>(null);
@@ -78,6 +82,7 @@ export default function GamePage() {
   const [showSaveNotif, setShowSaveNotif] = useState(false);
   const [savedGames, setSavedGames] = useState<SavedGame[]>([]);
   const [showSavesPanel, setShowSavesPanel] = useState(false);
+  const [showPromptSettings, setShowPromptSettings] = useState(false);
 
   // ── New Systems ─────────────────────────────────────────────────────────
   const [chatThreads, setChatThreads] = useState<ChatThread[]>([]);
@@ -112,6 +117,7 @@ export default function GamePage() {
             setGameState(restoredState);
             setProvincesCache(restoredState.provinces);
             setEvents(saved.events || []);
+            setStorySoFar(saved.storySoFar || "");
             setShowPresets(false);
             setCurrentGameId(gameId);
             const restoredLogs = saved.logs?.length ? saved.logs : [];
@@ -287,10 +293,12 @@ export default function GamePage() {
             provinces: provinceSummary,
           },
           config: gameConfig,
-          history: logs.slice(-30),
-          events: events.slice(-50),
+          history: logs.slice(-15),
+          events: events.slice(-10),
           relations,
           provinceSummary,
+          storySoFar,
+          promptOverrides: loadPromptOverrides(),
         }),
       });
 
@@ -298,6 +306,11 @@ export default function GamePage() {
 
       if (data.message) {
         addLog(data.message, "info");
+      }
+
+      // Update compressed context if AI returned one
+      if (data.storySoFar) {
+        setStorySoFar(data.storySoFar);
       }
 
       let hasSignificantEvent = false;
@@ -506,6 +519,7 @@ export default function GamePage() {
               .slice(-10)
               .map((e) => ({ year: e.year, description: e.description })),
             config: gameConfig,
+            promptOverrides: loadPromptOverrides(),
           }),
         });
 
@@ -604,6 +618,7 @@ export default function GamePage() {
               role: m.role,
             })),
             config: gameConfig,
+            promptOverrides: loadPromptOverrides(),
           }),
         });
 
@@ -679,7 +694,7 @@ export default function GamePage() {
         setCurrentGameId(id);
         window.history.replaceState(null, "", `?game=${id}`);
       }
-      saveGame(gameState, gameConfig, logs, id, events);
+      saveGame(gameState, gameConfig, logs, id, events, storySoFar);
       setLastSaveTime(Date.now());
       setShowSaveNotif(true);
       setTimeout(() => setShowSaveNotif(false), 2000);
@@ -710,6 +725,7 @@ export default function GamePage() {
     setGameState(restoredState);
     setProvincesCache(restoredState.provinces);
     setEvents(saved.events || []);
+    setStorySoFar(saved.storySoFar || "");
     setShowPresets(false);
     setCurrentGameId(saveId);
     window.history.replaceState(null, "", `?game=${saveId}`);
@@ -731,9 +747,9 @@ export default function GamePage() {
   // Auto-save
   useEffect(() => {
     if (!gameState || !gameConfig) return;
-    autoSave(gameState, gameConfig, logs, events, 2000, currentGameId || "autosave");
+    autoSave(gameState, gameConfig, logs, events, 2000, currentGameId || "autosave", storySoFar);
     refreshSavedGames();
-  }, [gameState, gameConfig, logs, events, refreshSavedGames, currentGameId]);
+  }, [gameState, gameConfig, logs, events, refreshSavedGames, currentGameId, storySoFar]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -924,6 +940,13 @@ export default function GamePage() {
             >
               Saves ({savedGames.length})
             </button>
+            <button
+              onClick={() => setShowPromptSettings(true)}
+              className="bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold px-2 py-1 rounded transition-colors"
+              title="Prompt Settings"
+            >
+              Settings
+            </button>
             <div className="w-px h-6 bg-slate-700" />
             <div className="flex items-center gap-2 pointer-events-auto">
               <select
@@ -1018,6 +1041,12 @@ export default function GamePage() {
           </div>
         </div>
       )}
+
+      {/* Prompt Settings */}
+      <PromptSettings
+        open={showPromptSettings}
+        onClose={() => setShowPromptSettings(false)}
+      />
     </main>
   );
 }
