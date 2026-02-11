@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import dynamic from "next/dynamic";
 import CommandTerminal from "@/components/CommandTerminal";
+import FlatMap from "@/components/FlatMap";
 import GameSetup, { GameConfig } from "@/components/GameSetup";
 import DiplomacyChat from "@/components/DiplomacyChat";
 import Timeline from "@/components/Timeline";
@@ -31,8 +31,6 @@ import {
   restoreSavedGameState,
   SavedGame,
 } from "@/lib/game-storage";
-
-const GlobeMap = dynamic(() => import("@/components/GlobeMap"), { ssr: false });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -695,18 +693,16 @@ export default function GamePage() {
 
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-slate-950 text-slate-100">
-      {/* 3D Globe Map */}
+      {/* Flat Map */}
       {gameState && (
-        <div className="globe-container">
-          <GlobeMap
-            provinces={gameState.provinces}
-            players={gameState.players}
-            onSelectProvince={handleSelectProvince}
-            selectedProvinceId={gameState.selectedProvinceId}
-            theme={gameState.theme}
-            relations={relations}
-          />
-        </div>
+        <FlatMap
+          provinces={gameState.provinces}
+          players={gameState.players}
+          onSelectProvince={handleSelectProvince}
+          selectedProvinceId={gameState.selectedProvinceId}
+          theme={gameState.theme}
+          relations={relations}
+        />
       )}
 
       {/* Diplomacy Chat (top-right) */}
