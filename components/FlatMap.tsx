@@ -244,9 +244,11 @@ export default function FlatMap({
     const w = sizeRef.current.width;
     const h = sizeRef.current.height;
 
+    // Fill viewport with landmass, minimize empty ocean
+    const fitScale = Math.max(w / 5.6, h / 3.0);
     const projection = d3.geoNaturalEarth1()
-      .scale(180)
-      .translate([w / 2, h / 2]);
+      .scale(fitScale)
+      .translate([w / 2, h / 2 + fitScale * 0.08]);
 
     projectionRef.current = projection;
 
@@ -422,8 +424,8 @@ export default function FlatMap({
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
 
-      // Recompute min zoom to fill viewport
-      const minZoom = Math.max(w / 960, h / 600, 1);
+      // Min zoom = 1 since projection already fills viewport
+      const minZoom = 1;
       const cam = cameraRef.current;
       if (cam.zoom < minZoom) {
         cam.zoom = minZoom;
@@ -872,7 +874,7 @@ export default function FlatMap({
 
       const cam = cameraRef.current;
       const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-      const minZoom = Math.max(sizeRef.current.width / 960, sizeRef.current.height / 600, 1);
+      const minZoom = 1;
       const maxZoom = 15;
 
       const newZoom = clamp(cam.targetZoom * zoomFactor, minZoom, maxZoom);

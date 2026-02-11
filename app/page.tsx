@@ -69,7 +69,11 @@ export default function GamePage() {
   const [timeStep, setTimeStep] = useState("1m");
   const [customTime, setCustomTime] = useState("");
 
+  // ── Order Queue (commands wait until Advance) ─────────────────────────
+  const [pendingOrders, setPendingOrders] = useState<string[]>([]);
+
   // ── Save/Load ───────────────────────────────────────────────────────────
+  const [currentGameId, setCurrentGameId] = useState<string | null>(null);
   const [lastSaveTime, setLastSaveTime] = useState<number | null>(null);
   const [showSaveNotif, setShowSaveNotif] = useState(false);
   const [savedGames, setSavedGames] = useState<SavedGame[]>([]);
@@ -95,6 +99,30 @@ export default function GamePage() {
       const data = await loadWorldData();
       setProvincesCache(data);
       refreshSavedGames();
+
+      // Auto-load game from URL query parameter
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        const gameId = params.get("game");
+        if (gameId) {
+          const saved = loadGame(gameId);
+          if (saved && data.length > 0) {
+            const restoredState = restoreSavedGameState(saved, data);
+            setGameConfig(saved.gameConfig);
+            setGameState(restoredState);
+            setProvincesCache(restoredState.provinces);
+            setEvents(saved.events || []);
+            setShowPresets(false);
+            setCurrentGameId(gameId);
+            const restoredLogs = saved.logs?.length ? saved.logs : [];
+            setLogs([
+              ...restoredLogs,
+              { id: uid(), type: "success", text: `Resumed game from ${new Date(saved.timestamp).toLocaleString()}.` },
+            ]);
+          }
+        }
+      }
+
       setLoading(false);
     }
     load();
@@ -121,6 +149,10 @@ export default function GamePage() {
   // ── Game Start ──────────────────────────────────────────────────────────
 
   const handleStartGame = (config: GameConfig) => {
+    const gameId = uid();
+    setCurrentGameId(gameId);
+    window.history.replaceState(null, "", `?game=${gameId}`);
+
     setGameConfig(config);
 
     let theme: MapTheme = "classic";
@@ -190,19 +222,45 @@ export default function GamePage() {
 
   // ── Turn Processing ─────────────────────────────────────────────────────
 
+  // ── Queue a command (does NOT call AI, waits for Advance) ──────────────
+
+  const queueOrder = (cmd: string) => {
+    if (!gameState || !gameConfig) return;
+    addLog(cmd, "command");
+    setPendingOrders((prev) => [...prev, cmd]);
+    addLog("Order queued. Click Advance to execute.", "info");
+  };
+
+  // ── Advance Turn (processes all queued orders + time skip) ─────────────
+
   const handleNextTurn = () => {
+    if (!gameState || !gameConfig || processingTurn) return;
+
     const period = timeStep === "custom" ? customTime : timeStep;
     const label = period || "1 month";
 
-    // Player-controlled time: advance the year on each Advance click
+    // Build the combined command: all pending orders + time advance
+    const orders = [...pendingOrders];
+    const timeCmd = `Advance time by ${label}`;
+
+    let fullCommand: string;
+    if (orders.length > 0) {
+      fullCommand = `ORDERS:\n${orders.map((o, i) => `${i + 1}. ${o}`).join("\n")}\n\nThen ${timeCmd}.`;
+    } else {
+      fullCommand = `No new orders. ${timeCmd}. Describe what happens in the world.`;
+    }
+
+    // Player-controlled time: advance the year
     setGameState((prev) => prev ? { ...prev, turn: prev.turn + 1 } : null);
-    processCommand(`Wait / Advance Time by ${label}`);
+    setPendingOrders([]);
+    processCommand(fullCommand);
   };
+
+  // ── Process a command against the AI (internal, called by handleNextTurn) ──
 
   const processCommand = async (cmd: string) => {
     if (!gameState || !gameConfig || processingTurn) return;
 
-    addLog(cmd, "command");
     setProcessingTurn(true);
 
     try {
@@ -326,14 +384,13 @@ export default function GamePage() {
         });
       }
 
-      // Show concise event summary after time skips
-      const isTimeSkip = cmd.toLowerCase().includes("advance") || cmd.toLowerCase().includes("wait");
-      if (isTimeSkip && turnEvents.length > 0) {
+      // Show concise event summary
+      if (turnEvents.length > 0) {
         const summary = turnEvents.map((e) => `  - ${e}`).join("\n");
         addLog(`--- Events This Period ---\n${summary}`, "event-summary");
       }
 
-      // Only create timeline snapshot on significant events (not every command)
+      // Only create timeline snapshot on significant events
       if (hasSignificantEvent) {
         setTimelineSnapshots((prev) => [
           ...prev,
@@ -609,15 +666,17 @@ export default function GamePage() {
   const handleSaveGame = () => {
     if (!gameState || !gameConfig) return;
     try {
-      const saveId = saveGame(gameState, gameConfig, logs, undefined, events);
+      const id = currentGameId || uid();
+      if (!currentGameId) {
+        setCurrentGameId(id);
+        window.history.replaceState(null, "", `?game=${id}`);
+      }
+      saveGame(gameState, gameConfig, logs, id, events);
       setLastSaveTime(Date.now());
       setShowSaveNotif(true);
       setTimeout(() => setShowSaveNotif(false), 2000);
       refreshSavedGames();
-      addLog(
-        `Game saved (${saveId === "autosave" ? "autosave" : "manual"}).`,
-        "success"
-      );
+      addLog("Game saved.", "success");
     } catch (error) {
       addLog(
         `Save failed: ${error instanceof Error ? error.message : "Unknown error"}`,
@@ -644,6 +703,8 @@ export default function GamePage() {
     setProvincesCache(restoredState.provinces);
     setEvents(saved.events || []);
     setShowPresets(false);
+    setCurrentGameId(saveId);
+    window.history.replaceState(null, "", `?game=${saveId}`);
 
     const restoredLogs = saved.logs?.length ? saved.logs : [];
     setLogs([
@@ -662,9 +723,9 @@ export default function GamePage() {
   // Auto-save
   useEffect(() => {
     if (!gameState || !gameConfig) return;
-    autoSave(gameState, gameConfig, logs, events);
+    autoSave(gameState, gameConfig, logs, events, 2000, currentGameId || "autosave");
     refreshSavedGames();
-  }, [gameState, gameConfig, logs, events, refreshSavedGames]);
+  }, [gameState, gameConfig, logs, events, refreshSavedGames, currentGameId]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -691,6 +752,10 @@ export default function GamePage() {
       <PresetBrowser
         onSelectPreset={handleSelectPreset}
         onCustomScenario={handleCustomScenario}
+        savedGames={savedGames}
+        onLoadSavedGame={handleLoadSavedGame}
+        onDeleteSavedGame={handleDeleteSavedGame}
+        getNationName={getNationLabel}
       />
     );
   }
@@ -754,9 +819,36 @@ export default function GamePage() {
         />
       )}
 
-      {/* Command Terminal (bottom-left, pushed up when timeline visible) */}
+      {/* Command Terminal + Advance Button (bottom-left) */}
       <div style={{ position: "absolute", bottom: timelineSnapshots.length > 0 ? 140 : 16, left: 16, zIndex: 20 }}>
-        <CommandTerminal logs={logs} onCommand={processCommand} />
+        <CommandTerminal logs={logs} onCommand={queueOrder} />
+        {/* Inline advance bar below terminal */}
+        <div className="mt-1 flex items-center gap-2 bg-slate-900/90 border border-slate-700 rounded px-2 py-1.5 backdrop-blur font-mono">
+          {pendingOrders.length > 0 && (
+            <span className="text-amber-400 text-xs">
+              {pendingOrders.length} order{pendingOrders.length > 1 ? "s" : ""} queued
+            </span>
+          )}
+          {pendingOrders.length === 0 && (
+            <span className="text-slate-500 text-xs">No orders queued</span>
+          )}
+          <button
+            onClick={() => setPendingOrders([])}
+            disabled={pendingOrders.length === 0}
+            className="text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30 px-1"
+            title="Clear queued orders"
+          >
+            Clear
+          </button>
+          <div className="flex-1" />
+          <button
+            onClick={handleNextTurn}
+            disabled={processingTurn}
+            className="bg-amber-700 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-bold px-4 py-1 rounded transition-colors uppercase"
+          >
+            {processingTurn ? "Processing..." : "Advance"}
+          </button>
+        </div>
       </div>
 
       {/* Timeline (bottom) */}
