@@ -536,13 +536,12 @@ export default function FlatMap({
         if (p.ownerId && plrs[p.ownerId]) {
           fillRgb = parseColor(plrs[p.ownerId].color);
         } else {
-          // Neutral: muted version of province color
+          // Neutral: very dark, subtle tint from province color for variety
           const raw = parseColor(p.color);
-          const gray = Math.round((raw[0] + raw[1] + raw[2]) / 3);
           fillRgb = [
-            Math.round(raw[0] * 0.4 + gray * 0.3 + seaRgb[0] * 0.3),
-            Math.round(raw[1] * 0.4 + gray * 0.3 + seaRgb[1] * 0.3),
-            Math.round(raw[2] * 0.4 + gray * 0.3 + seaRgb[2] * 0.3),
+            Math.round(seaRgb[0] * 0.7 + raw[0] * 0.08 + 20),
+            Math.round(seaRgb[1] * 0.7 + raw[1] * 0.08 + 20),
+            Math.round(seaRgb[2] * 0.7 + raw[2] * 0.08 + 25),
           ];
         }
 

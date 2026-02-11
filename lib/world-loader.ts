@@ -530,7 +530,7 @@ function countryColor(isoCode: string): string {
   const num = parseInt(isoCode, 10) || 0;
   // Golden angle in degrees for good hue distribution
   const hue = (num * 137.508) % 360;
-  return `hsl(${Math.round(hue)}, 55%, 55%)`;
+  return `hsl(${Math.round(hue)}, 40%, 30%)`;
 }
 
 export async function loadWorldData(): Promise<Province[]> {
