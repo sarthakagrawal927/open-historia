@@ -15,7 +15,7 @@ interface GameSetupProps {
   preset?: { year: number; scenario: string; difficulty: string; suggestedNations: string[] } | null;
 }
 
-export type Provider = "google" | "openai" | "anthropic" | "deepseek";
+export type Provider = "local" | "google" | "openai" | "anthropic" | "deepseek";
 
 export interface GameConfig {
   year: number;
@@ -28,6 +28,11 @@ export interface GameConfig {
 }
 
 const MODELS: Record<Provider, { id: string; name: string }[]> = {
+  local: [
+    { id: "claude", name: "Claude (via CLI)" },
+    { id: "codex", name: "Codex (via CLI)" },
+    { id: "gemini", name: "Gemini (via CLI)" },
+  ],
   deepseek: [
     { id: "deepseek-reasoner", name: "DeepSeek R1 (Reasoning)" },
     { id: "deepseek-chat", name: "DeepSeek V3 (Fast)" },
@@ -49,7 +54,7 @@ const MODELS: Record<Provider, { id: string; name: string }[]> = {
   ],
 };
 
-const DEFAULT_PROVIDER: Provider = "google";
+const DEFAULT_PROVIDER: Provider = "local";
 
 const getProviderStorageKey = (provider: Provider) => `oh_key_${provider}`;
 
@@ -147,6 +152,7 @@ export default function GameSetup({
 
   const getProviderName = (p: Provider) => {
     switch (p) {
+      case "local": return "Local CLI";
       case "google": return "Gemini";
       case "deepseek": return "DeepSeek";
       case "openai": return "OpenAI";
@@ -159,7 +165,7 @@ export default function GameSetup({
     e.preventDefault();
     const normalizedApiKey = apiKey.trim();
 
-    if (!playerNationId || !normalizedApiKey) {
+    if (!playerNationId || (provider !== "local" && !normalizedApiKey)) {
         alert("Please select a nation and provide an API Key.");
         return;
     }
@@ -193,6 +199,7 @@ export default function GameSetup({
                             onChange={e => handleProviderChange(e.target.value as Provider)}
                             className="w-full bg-slate-950 border border-slate-600 rounded p-2 text-slate-100 focus:border-amber-500 outline-none"
                         >
+                            <option value="local">Local CLI Bridge (No Key)</option>
                             <option value="deepseek">DeepSeek (New)</option>
                             <option value="google">Google Gemini</option>
                             <option value="openai">OpenAI</option>
@@ -213,10 +220,15 @@ export default function GameSetup({
                     </div>
                 </div>
 
+                {provider === "local" ? (
+                    <div className="p-3 bg-emerald-900/30 border border-emerald-800 rounded text-sm text-emerald-300">
+                        Using local CLI bridge at <code className="text-emerald-200">localhost:3456</code>. No API key needed. Make sure the bridge server is running.
+                    </div>
+                ) : (
                 <div>
                     <label className="block text-sm font-bold text-slate-300 mb-2">API Key</label>
-                    <input 
-                        type="password" 
+                    <input
+                        type="password"
                         value={apiKey}
                         onChange={e => handleApiKeyChange(e.target.value)}
                         className="w-full bg-slate-950 border border-slate-600 rounded p-2 text-slate-100 focus:border-amber-500 outline-none"
@@ -225,8 +237,8 @@ export default function GameSetup({
                     <div className="flex items-center justify-between mt-2">
                         <p className="text-xs text-slate-500">Keys are stored in memory only unless saved.</p>
                         <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-400 hover:text-slate-300">
-                            <input 
-                                type="checkbox" 
+                            <input
+                                type="checkbox"
                                 checked={rememberKey}
                                 onChange={e => handleRememberKeyChange(e.target.checked)}
                                 className="accent-amber-600 bg-slate-900 border-slate-600 rounded focus:ring-amber-500"
@@ -235,6 +247,7 @@ export default function GameSetup({
                         </label>
                     </div>
                 </div>
+                )}
             </div>
 
             <div className="grid grid-cols-2 gap-6">

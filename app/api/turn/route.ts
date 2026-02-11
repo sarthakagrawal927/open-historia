@@ -3,6 +3,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { buildGameMasterPrompt } from "@/lib/ai-prompts";
+import { callCliBridge } from "@/lib/cli-bridge";
 
 // ---------------------------------------------------------------------------
 // Constants & Helpers
@@ -134,7 +135,7 @@ export async function POST(req: NextRequest) {
   try {
     const { command, gameState, config, history, events, relations, provinceSummary } = await req.json();
 
-    if (!config.apiKey) {
+    if (config.provider !== "local" && !config.apiKey) {
       return NextResponse.json({ error: "API Key missing" }, { status: 400 });
     }
 
@@ -151,6 +152,14 @@ export async function POST(req: NextRequest) {
     let responseText = "";
 
     switch (config.provider) {
+      case "local": {
+        responseText = await callCliBridge({
+          provider: config.model || "claude",
+          prompt: systemPrompt,
+          systemPrompt: "You are a JSON-only response bot for a grand strategy game. Never explain your answer, only return valid JSON.",
+        });
+        break;
+      }
       case "google": {
         const genAI = new GoogleGenerativeAI(config.apiKey);
         const preferredModel = normalizeGeminiModel(config.model);
