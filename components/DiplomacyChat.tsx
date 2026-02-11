@@ -75,7 +75,7 @@ function toneLabel(tone?: ChatMessage["tone"]): string {
   }
 }
 
-/** Get unique foreign nations from provinces (nations with an ownerId that are not the player). */
+/** Get all notable nations from provinces that aren't the player's own nation. */
 function getForeignNations(
   provinces: Province[],
   players: Record<string, Player>,
@@ -84,6 +84,7 @@ function getForeignNations(
   const seen = new Set<string>();
   const nations: { id: string; name: string; color: string }[] = [];
 
+  // First add AI-owned nations
   for (const p of provinces) {
     if (p.ownerId && p.ownerId !== "player" && !seen.has(p.ownerId)) {
       seen.add(p.ownerId);
@@ -94,15 +95,15 @@ function getForeignNations(
     }
   }
 
-  // Also include nations from provinces by name when ownerId is not in players
-  // but owner name differs from player nation name
+  // Then add all named provinces as potential nations to talk to
+  // (even if unowned - they represent countries you can interact with)
   for (const p of provinces) {
     if (
-      p.ownerId &&
-      p.ownerId !== "player" &&
-      !players[p.ownerId] &&
       p.name !== playerNationName &&
-      !seen.has(p.name)
+      !p.name.startsWith("Region") &&
+      p.name !== "Antarctica" &&
+      !seen.has(p.name) &&
+      p.resources.population > 20
     ) {
       seen.add(p.name);
       nations.push({ id: p.name, name: p.name, color: p.color });
@@ -506,25 +507,29 @@ export default function DiplomacyChat({
     [chatThreads],
   );
 
-  // Detect if the selected province on the map belongs to a foreign nation
+  // Detect if the selected province on the map is a foreign nation
   // and whether a bilateral thread already exists for it.
   const selectedProvinceSuggestion = useMemo(() => {
     if (!selectedProvinceId) return null;
 
     const province = provinces.find((p) => p.id === selectedProvinceId);
-    if (!province || !province.ownerId || province.ownerId === "player")
-      return null;
+    if (!province || province.ownerId === "player") return null;
 
-    const owner = players[province.ownerId];
+    // Use the owner's name if owned by AI, otherwise use province name as nation
+    const owner = province.ownerId ? players[province.ownerId] : null;
     const nationName = owner?.name ?? province.name;
 
-    // Check if bilateral thread exists
+    // Skip generic/small regions
+    if (province.name.startsWith("Region") || province.name === "Antarctica") return null;
+
+    // Check if bilateral thread already exists
     const existingThread = chatThreads.find(
       (t) =>
-        t.type === "bilateral" && t.participants.includes(nationName),
+        t.type === "bilateral" &&
+        (t.participants.includes(nationName) || t.name === nationName),
     );
 
-    if (existingThread) return null; // Already have a thread
+    if (existingThread) return null;
 
     return {
       nationName,
@@ -533,6 +538,17 @@ export default function DiplomacyChat({
   }, [selectedProvinceId, provinces, players, chatThreads]);
 
   // ----- Effects -----
+
+  // Auto-open newly created threads
+  const prevThreadCountRef = useRef(chatThreads.length);
+  useEffect(() => {
+    if (chatThreads.length > prevThreadCountRef.current) {
+      // A new thread was added - open it
+      const newest = chatThreads[chatThreads.length - 1];
+      if (newest) setActiveThreadId(newest.id);
+    }
+    prevThreadCountRef.current = chatThreads.length;
+  }, [chatThreads]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {

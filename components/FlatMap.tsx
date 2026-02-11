@@ -614,10 +614,17 @@ export default function FlatMap({
           ctx.restore();
         }
 
-        // Border (hovered provinces get a brighter border)
-        ctx.strokeStyle = isHovered && !isSelected ? brighten(th.border, 0.5) : th.border;
-        ctx.lineWidth = (isHovered && !isSelected ? 1.0 : 0.5) / cam.zoom;
-        ctx.stroke(path2d);
+        // Player-owned territory: distinct bright border
+        if (p.ownerId === "player") {
+          ctx.strokeStyle = "rgba(245,158,11,0.6)";
+          ctx.lineWidth = 1.5 / cam.zoom;
+          ctx.stroke(path2d);
+        } else {
+          // Border (hovered provinces get a brighter border)
+          ctx.strokeStyle = isHovered && !isSelected ? brighten(th.border, 0.5) : th.border;
+          ctx.lineWidth = (isHovered && !isSelected ? 1.0 : 0.5) / cam.zoom;
+          ctx.stroke(path2d);
+        }
       }
 
       // ---- 4. War Zone Borders (pulsing red) ----
