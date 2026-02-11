@@ -244,11 +244,10 @@ export default function FlatMap({
     const w = sizeRef.current.width;
     const h = sizeRef.current.height;
 
-    // Fill viewport with landmass, minimize empty ocean
-    const fitScale = Math.max(w / 5.6, h / 3.0);
+    // Base scale: fit the map comfortably — user can zoom in/out freely
     const projection = d3.geoNaturalEarth1()
-      .scale(fitScale)
-      .translate([w / 2, h / 2 + fitScale * 0.08]);
+      .scale(200)
+      .translate([w / 2, h / 2]);
 
     projectionRef.current = projection;
 
@@ -424,12 +423,12 @@ export default function FlatMap({
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
 
-      // Min zoom = 1 since projection already fills viewport
-      const minZoom = 0.5;
+      // On first load, set camera zoom to fill viewport with the map
       const cam = cameraRef.current;
-      if (cam.zoom < minZoom) {
-        cam.zoom = minZoom;
-        cam.targetZoom = minZoom;
+      const idealZoom = Math.max(w / 960, h / 500);
+      if (cam.zoom === 1 && cam.targetZoom === 1 && cam.x === 0 && cam.y === 0) {
+        cam.zoom = idealZoom;
+        cam.targetZoom = idealZoom;
       }
 
       buildProjectionAndCache();
@@ -874,7 +873,7 @@ export default function FlatMap({
 
       const cam = cameraRef.current;
       const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-      const minZoom = 0.5;
+      const minZoom = 0.3;
       const maxZoom = 15;
 
       const newZoom = clamp(cam.targetZoom * zoomFactor, minZoom, maxZoom);
