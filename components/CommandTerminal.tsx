@@ -112,7 +112,7 @@ export default function CommandTerminal({ logs, onCommand }: CommandTerminalProp
   };
 
   return (
-    <div className="absolute bottom-4 left-4 w-[32rem] max-w-[90vw] h-64 bg-slate-950/90 border border-slate-700 rounded-lg shadow-2xl flex flex-col font-mono text-sm overflow-hidden backdrop-blur-md">
+    <div className="w-[32rem] max-w-[90vw] h-64 bg-slate-950/90 border border-slate-700 rounded-lg shadow-2xl flex flex-col font-mono text-sm overflow-hidden backdrop-blur-md">
       {/* Log Display */}
       <div className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
         {logs.length === 0 && (

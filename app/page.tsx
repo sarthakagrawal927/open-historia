@@ -195,7 +195,11 @@ export default function GamePage() {
 
   const handleNextTurn = () => {
     const period = timeStep === "custom" ? customTime : timeStep;
-    processCommand(`Wait / Advance Time by ${period || "1 month"}`);
+    const label = period || "1 month";
+
+    // Player-controlled time: advance the year on each Advance click
+    setGameState((prev) => prev ? { ...prev, turn: prev.turn + 1 } : null);
+    processCommand(`Wait / Advance Time by ${label}`);
   };
 
   const processCommand = async (cmd: string) => {
@@ -253,10 +257,10 @@ export default function GamePage() {
             });
           }
 
+          // Time updates are only applied from the "Advance" button,
+          // not from AI responses. The player controls the clock.
           if (update.type === "time") {
-            setGameState((prev) =>
-              prev ? { ...prev, turn: prev.turn + ((update.amount as number) || 1) } : null
-            );
+            // Ignored — player controls time via the Advance button
           }
 
           if (update.type === "event") {
@@ -720,8 +724,10 @@ export default function GamePage() {
         />
       )}
 
-      {/* Command Terminal (bottom-left) */}
-      <CommandTerminal logs={logs} onCommand={processCommand} />
+      {/* Command Terminal (bottom-left, pushed up when timeline visible) */}
+      <div style={{ position: "absolute", bottom: timelineSnapshots.length > 0 ? 140 : 16, left: 16, zIndex: 20 }}>
+        <CommandTerminal logs={logs} onCommand={processCommand} />
+      </div>
 
       {/* Timeline (bottom) */}
       {timelineSnapshots.length > 0 && (

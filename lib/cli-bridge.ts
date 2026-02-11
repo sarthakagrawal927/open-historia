@@ -12,7 +12,7 @@ export async function callCliBridge(opts: {
 }): Promise<string> {
   const { provider = "claude", model, prompt, systemPrompt } = opts;
 
-  const res = await fetch(`${BRIDGE_URL}/chat`, {
+  const res = await fetch(`${BRIDGE_URL}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

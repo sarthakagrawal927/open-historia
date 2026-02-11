@@ -564,9 +564,9 @@ export default function FlatMap({
           }
         }
 
-        // Hover brightening (smooth)
-        if (isHovered && hover.brightness > 0.01) {
-          const b = hover.brightness * 0.3;
+        // Hover brightening (subtle, just enough to notice)
+        if (isHovered && !isSelected && hover.brightness > 0.01) {
+          const b = hover.brightness * 0.12;
           fillRgb = [
             Math.min(255, Math.round(fillRgb[0] + (255 - fillRgb[0]) * b)),
             Math.min(255, Math.round(fillRgb[1] + (255 - fillRgb[1]) * b)),
@@ -613,9 +613,9 @@ export default function FlatMap({
           ctx.restore();
         }
 
-        // Border
-        ctx.strokeStyle = th.border;
-        ctx.lineWidth = (isHovered ? 1.2 : 0.5) / cam.zoom;
+        // Border (hovered provinces get a brighter border)
+        ctx.strokeStyle = isHovered && !isSelected ? brighten(th.border, 0.5) : th.border;
+        ctx.lineWidth = (isHovered && !isSelected ? 1.0 : 0.5) / cam.zoom;
         ctx.stroke(path2d);
       }
 
@@ -932,7 +932,12 @@ export default function FlatMap({
       const offsetX = rect ? e.clientX - rect.left : e.clientX;
       const offsetY = rect ? e.clientY - rect.top : e.clientY;
       const province = findProvinceAtScreen(offsetX, offsetY);
-      onSelectRef.current(province ? province.id : null);
+      if (province && province.id === selectedIdRef.current) {
+        // Toggle off: clicking the already-selected province deselects
+        onSelectRef.current(null);
+      } else {
+        onSelectRef.current(province ? province.id : null);
+      }
     }
     isDraggingRef.current = false;
   }, [findProvinceAtScreen]);
