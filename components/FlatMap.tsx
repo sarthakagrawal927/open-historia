@@ -331,14 +331,14 @@ export default function FlatMap({
     const w = sizeRef.current.width;
     const h = sizeRef.current.height;
 
-    // Target: center the province on screen
-    cam.targetX = w / 2 - projected[0] * cam.targetZoom;
-    cam.targetY = h / 2 - projected[1] * cam.targetZoom;
-
-    // If zoomed out too far, zoom in a bit
+    // If zoomed out too far, zoom in first so position calc uses final zoom
     if (cam.targetZoom < 2.5) {
       cam.targetZoom = 2.5;
     }
+
+    // Target: center the province on screen (using the target zoom)
+    cam.targetX = w / 2 - projected[0] * cam.targetZoom;
+    cam.targetY = h / 2 - projected[1] * cam.targetZoom;
   }, [selectedProvinceId, provinces]);
 
   // ---------------------------------------------------------------------------

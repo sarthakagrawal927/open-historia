@@ -36,11 +36,8 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
-interface LogEntry {
-  id: string;
-  type: "command" | "info" | "error" | "success";
-  text: string;
-}
+// LogEntry type imported from game-storage
+type LogEntry = import("@/lib/game-storage").LogEntry;
 
 function uid(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -237,47 +234,69 @@ export default function GamePage() {
         addLog(data.message, "info");
       }
 
+      let hasSignificantEvent = false;
+      const turnEvents: string[] = [];
+
       if (data.updates) {
         data.updates.forEach((update: Record<string, unknown>) => {
           if (update.type === "owner") {
+            const provinceName = update.provinceName as string;
+            const newOwner = update.newOwnerId as string;
+            const isPlayerCapture = newOwner === "player";
+
             setGameState((prev) => {
               if (!prev) return null;
               const target = prev.provinces.find(
-                (p) => p.name.toLowerCase() === (update.provinceName as string).toLowerCase()
+                (p) => p.name.toLowerCase() === provinceName.toLowerCase()
               );
               if (target) {
                 return {
                   ...prev,
                   provinces: prev.provinces.map((p) =>
-                    p.id === target.id ? { ...p, ownerId: update.newOwnerId as string } : p
+                    p.id === target.id ? { ...p, ownerId: newOwner } : p
                   ),
                 };
               }
               return prev;
             });
+
+            hasSignificantEvent = true;
+            if (isPlayerCapture) {
+              addLog(`CAPTURED: ${provinceName} is now under your control!`, "capture");
+              turnEvents.push(`Captured ${provinceName}`);
+            } else {
+              addLog(`${provinceName} seized by ${newOwner}`, "war");
+              turnEvents.push(`${provinceName} fell to ${newOwner}`);
+            }
           }
 
-          // Time updates are only applied from the "Advance" button,
-          // not from AI responses. The player controls the clock.
+          // Time updates ignored — player controls time via Advance button
           if (update.type === "time") {
-            // Ignored — player controls time via the Advance button
+            // no-op
           }
 
           if (update.type === "event") {
+            const eventType = (update.eventType as string) || "flavor";
             const newEvent: GameEvent = {
               id: uid(),
               year: (update.year as number) || gameState.turn,
               description: update.description as string,
-              type: (update.eventType as GameEvent["type"]) || "flavor",
+              type: (eventType as GameEvent["type"]) || "flavor",
             };
             setEvents((prev) => [...prev, newEvent]);
-            if (
-              update.eventType === "war" ||
-              update.eventType === "diplomacy" ||
-              update.eventType === "crisis"
-            ) {
-              addLog(`[EVENT] ${update.description}`, "info");
+
+            const logType = (
+              eventType === "war" ? "war" :
+              eventType === "diplomacy" ? "diplomacy" :
+              eventType === "economy" ? "economy" :
+              eventType === "crisis" ? "crisis" : "info"
+            ) as LogEntry["type"];
+
+            if (eventType !== "flavor") {
+              hasSignificantEvent = true;
+              turnEvents.push(update.description as string);
             }
+            addLog(update.description as string, logType);
           }
 
           if (update.type === "relation") {
@@ -297,34 +316,45 @@ export default function GamePage() {
               );
               return [...filtered, rel];
             });
-            addLog(
-              `[RELATION] ${update.nationA} ↔ ${update.nationB}: ${update.relationType}`,
-              "info"
-            );
+
+            hasSignificantEvent = true;
+            const relType = update.relationType as string;
+            const logType = (relType === "war" ? "war" : relType === "allied" ? "diplomacy" : "info") as LogEntry["type"];
+            addLog(`${update.nationA} ↔ ${update.nationB}: ${relType}`, logType);
+            turnEvents.push(`${update.nationA} & ${update.nationB} now ${relType}`);
           }
         });
       }
 
-      // Create timeline snapshot after processing
-      setTimelineSnapshots((prev) => [
-        ...prev,
-        {
-          id: uid(),
-          turnYear: gameState.turn,
-          timestamp: Date.now(),
-          description: data.message?.slice(0, 100) || cmd.slice(0, 100),
-          command: cmd,
-          gameStateSlim: {
-            turn: gameState.turn,
-            provinceOwners: Object.fromEntries(
-              gameState.provinces.map((p) => [String(p.id), p.ownerId])
-            ),
-            events: events.slice(-20),
-            relations,
+      // Show concise event summary after time skips
+      const isTimeSkip = cmd.toLowerCase().includes("advance") || cmd.toLowerCase().includes("wait");
+      if (isTimeSkip && turnEvents.length > 0) {
+        const summary = turnEvents.map((e) => `  - ${e}`).join("\n");
+        addLog(`--- Events This Period ---\n${summary}`, "event-summary");
+      }
+
+      // Only create timeline snapshot on significant events (not every command)
+      if (hasSignificantEvent) {
+        setTimelineSnapshots((prev) => [
+          ...prev,
+          {
+            id: uid(),
+            turnYear: gameState.turn,
+            timestamp: Date.now(),
+            description: turnEvents[0] || data.message?.slice(0, 100) || cmd.slice(0, 100),
+            command: cmd,
+            gameStateSlim: {
+              turn: gameState.turn,
+              provinceOwners: Object.fromEntries(
+                gameState.provinces.map((p) => [String(p.id), p.ownerId])
+              ),
+              events: events.slice(-20),
+              relations,
+            },
+            parentSnapshotId: prev.length > 0 ? prev[prev.length - 1].id : null,
           },
-          parentSnapshotId: prev.length > 0 ? prev[prev.length - 1].id : null,
-        },
-      ]);
+        ]);
+      }
     } catch (err) {
       console.error(err);
       addLog("Communication with HQ lost (Network Error).", "error");

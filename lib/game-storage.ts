@@ -3,7 +3,7 @@ import { GameConfig } from "@/components/GameSetup";
 
 export interface LogEntry {
   id: string;
-  type: "command" | "info" | "error" | "success";
+  type: "command" | "info" | "error" | "success" | "capture" | "war" | "diplomacy" | "economy" | "crisis" | "event-summary";
   text: string;
 }
 

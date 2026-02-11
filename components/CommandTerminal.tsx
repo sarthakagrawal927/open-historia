@@ -2,11 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
 
-interface LogEntry {
-  id: string; // Changed to string
-  type: "command" | "info" | "error" | "success";
-  text: string;
-}
+import type { LogEntry } from "@/lib/game-storage";
 
 interface CommandTerminalProps {
   logs: LogEntry[];
@@ -118,17 +114,65 @@ export default function CommandTerminal({ logs, onCommand }: CommandTerminalProp
         {logs.length === 0 && (
             <div className="text-slate-500 italic">History awaits your command...</div>
         )}
-        {logs.map((log) => (
-          <div key={log.id} className={`
-            ${log.type === "command" ? "text-slate-400 font-bold" : ""}
-            ${log.type === "info" ? "text-slate-300" : ""}
-            ${log.type === "error" ? "text-red-400" : ""}
-            ${log.type === "success" ? "text-emerald-400" : ""}
-          `}>
-            {log.type === "command" && <span className="mr-2 text-slate-600">&gt;</span>}
-            {log.text}
-          </div>
-        ))}
+        {logs.map((log) => {
+          if (log.type === "capture") {
+            return (
+              <div key={log.id} className="px-2 py-1.5 rounded bg-amber-900/30 border-l-2 border-amber-500">
+                <span className="text-amber-400 font-bold text-xs uppercase tracking-wider">TERRITORY CAPTURED</span>
+                <div className="text-amber-200 font-bold mt-0.5">{log.text}</div>
+              </div>
+            );
+          }
+          if (log.type === "war") {
+            return (
+              <div key={log.id} className="px-2 py-1 rounded bg-red-950/30 border-l-2 border-red-500">
+                <span className="text-red-400 font-bold text-[10px] uppercase tracking-wider mr-1">WAR</span>
+                <span className="text-red-300">{log.text}</span>
+              </div>
+            );
+          }
+          if (log.type === "diplomacy") {
+            return (
+              <div key={log.id} className="px-2 py-1 rounded bg-sky-950/30 border-l-2 border-sky-500">
+                <span className="text-sky-400 font-bold text-[10px] uppercase tracking-wider mr-1">DIPLOMACY</span>
+                <span className="text-sky-200">{log.text}</span>
+              </div>
+            );
+          }
+          if (log.type === "economy") {
+            return (
+              <div key={log.id} className="px-2 py-1 rounded bg-emerald-950/30 border-l-2 border-emerald-500">
+                <span className="text-emerald-400 font-bold text-[10px] uppercase tracking-wider mr-1">ECONOMY</span>
+                <span className="text-emerald-200">{log.text}</span>
+              </div>
+            );
+          }
+          if (log.type === "crisis") {
+            return (
+              <div key={log.id} className="px-2 py-1.5 rounded bg-purple-950/30 border-l-2 border-purple-500 animate-pulse">
+                <span className="text-purple-400 font-bold text-[10px] uppercase tracking-wider mr-1">CRISIS</span>
+                <span className="text-purple-200 font-bold">{log.text}</span>
+              </div>
+            );
+          }
+          if (log.type === "event-summary") {
+            return (
+              <div key={log.id} className="px-2 py-2 rounded bg-slate-800/50 border border-slate-700 mt-1">
+                {log.text.split("\n").map((line, i) => (
+                  <div key={i} className={i === 0 ? "text-amber-500 font-bold text-[10px] uppercase tracking-wider mb-1" : "text-slate-300 text-xs"}>
+                    {line}
+                  </div>
+                ))}
+              </div>
+            );
+          }
+          return (
+            <div key={log.id} className={`${log.type === "command" ? "text-slate-400 font-bold" : ""} ${log.type === "info" ? "text-slate-300" : ""} ${log.type === "error" ? "text-red-400" : ""} ${log.type === "success" ? "text-emerald-400" : ""}`}>
+              {log.type === "command" && <span className="mr-2 text-slate-600">&gt;</span>}
+              {log.text}
+            </div>
+          );
+        })}
         <div ref={endRef} />
       </div>
 
