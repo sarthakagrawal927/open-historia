@@ -726,33 +726,67 @@ export default function FlatMap({
         }
       }
 
-      // ---- 8. Country Labels (at high zoom) ----
-      if (cam.zoom > 2.5) {
+      // ---- 8. Country Labels (EU4/HOI4-style, zoom-tiered) ----
+      {
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
 
         for (let i = 0; i < provs.length; i++) {
           const p = provs[i];
-          if (p.resources.population <= 30) continue;
+          const pop = p.resources.population;
+
+          // Tiered visibility: major powers always visible, smaller nations need more zoom
+          let minZoom: number;
+          if (pop >= 100) minZoom = 1.0;       // Major powers (USA, China, India, etc.)
+          else if (pop >= 30) minZoom = 1.3;    // Large nations (UK, France, Germany, etc.)
+          else if (pop >= 10) minZoom = 1.8;    // Medium nations
+          else if (pop >= 2) minZoom = 2.5;     // Small nations
+          else minZoom = 4.0;                    // Microstates
+
+          if (cam.zoom < minZoom) continue;
 
           const proj = projection(p.center);
           if (!proj) continue;
 
           const isPlayer = p.ownerId === "player";
 
-          ctx.font = `${isPlayer ? "bold " : ""}${10 / cam.zoom}px monospace`;
-          ctx.fillStyle = isPlayer ? "#ffffff" : "rgba(160,160,180,0.5)";
+          // Font size scales with importance (sqrt of population) and inversely with zoom
+          const baseSize = Math.max(6, Math.min(14, 4 + Math.sqrt(pop) * 0.8));
+          const fontSize = baseSize / cam.zoom;
 
-          // Text shadow for readability
+          // Fade in labels as zoom approaches their threshold
+          const fadeRange = 0.3;
+          const fadeAlpha = Math.min(1, (cam.zoom - minZoom) / fadeRange);
+          if (fadeAlpha <= 0) continue;
+
+          const label = pop >= 30 ? p.name.toUpperCase() : p.name;
+
+          ctx.save();
+          ctx.font = `${isPlayer ? "bold " : "bold "}${fontSize}px sans-serif`;
+
+          // Text stroke (outline) for readability — dark outline
+          ctx.lineWidth = 2.5 / cam.zoom;
+          ctx.lineJoin = "round";
+          ctx.strokeStyle = "rgba(0,0,0,0.8)";
+          ctx.globalAlpha = fadeAlpha;
+          ctx.strokeText(label, proj[0], proj[1]);
+
+          // Fill color: player white, owned in owner's bright tint, neutral in muted
           if (isPlayer) {
-            ctx.save();
-            ctx.shadowColor = "rgba(0,0,0,0.8)";
-            ctx.shadowBlur = 3 / cam.zoom;
-            ctx.fillText(p.name, proj[0], proj[1]);
-            ctx.restore();
+            ctx.fillStyle = "#ffffff";
+          } else if (p.ownerId && plrs[p.ownerId]) {
+            const oc = parseColor(plrs[p.ownerId].color);
+            ctx.fillStyle = rgbToCSS(
+              Math.min(255, oc[0] + 100),
+              Math.min(255, oc[1] + 100),
+              Math.min(255, oc[2] + 100)
+            );
           } else {
-            ctx.fillText(p.name, proj[0], proj[1]);
+            ctx.fillStyle = "rgba(190,195,210,0.7)";
           }
+          ctx.fillText(label, proj[0], proj[1]);
+
+          ctx.restore();
         }
       }
 
