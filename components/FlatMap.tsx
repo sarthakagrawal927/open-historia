@@ -211,6 +211,7 @@ export default function FlatMap({
   const lastTimeRef = useRef<number>(0);
 
   // Interaction refs
+  const isPointerDownRef = useRef(false);
   const isDraggingRef = useRef(false);
   const mouseDownPosRef = useRef({ x: 0, y: 0 });
   const mousePosRef = useRef({ x: 0, y: 0 });
@@ -859,9 +860,11 @@ export default function FlatMap({
   // ---------------------------------------------------------------------------
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    isPointerDownRef.current = true;
     isDraggingRef.current = false;
     mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
     mousePosRef.current = { x: e.clientX - (containerRef.current?.getBoundingClientRect().left || 0), y: e.clientY - (containerRef.current?.getBoundingClientRect().top || 0) };
+    (e.target as HTMLElement)?.setPointerCapture?.(e.pointerId);
   }, []);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
@@ -870,27 +873,28 @@ export default function FlatMap({
     const offsetY = rect ? e.clientY - rect.top : e.clientY;
     mousePosRef.current = { x: offsetX, y: offsetY };
 
-    const dx = e.clientX - mouseDownPosRef.current.x;
-    const dy = e.clientY - mouseDownPosRef.current.y;
+    // Only start drag detection when a button is held down
+    if (isPointerDownRef.current) {
+      const dx = e.clientX - mouseDownPosRef.current.x;
+      const dy = e.clientY - mouseDownPosRef.current.y;
 
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
-      if (!isDraggingRef.current) {
-        isDraggingRef.current = true;
-        // Clear hover on drag start
-        hoverRef.current.provinceId = null;
-        hoverRef.current.targetBrightness = 0;
-        setTooltipData(null);
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        if (!isDraggingRef.current) {
+          isDraggingRef.current = true;
+          hoverRef.current.provinceId = null;
+          hoverRef.current.targetBrightness = 0;
+          setTooltipData(null);
+        }
       }
-    }
 
-    if (isDraggingRef.current) {
-      const cam = cameraRef.current;
-      cam.targetX += e.movementX;
-      cam.targetY += e.movementY;
-      // Also directly adjust current for instant feel
-      cam.x += e.movementX;
-      cam.y += e.movementY;
-      return;
+      if (isDraggingRef.current) {
+        const cam = cameraRef.current;
+        cam.targetX += e.movementX;
+        cam.targetY += e.movementY;
+        cam.x += e.movementX;
+        cam.y += e.movementY;
+        return;
+      }
     }
 
     // Throttled hover detection
@@ -927,22 +931,23 @@ export default function FlatMap({
   }, [findProvinceAtScreen]);
 
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
-    if (!isDraggingRef.current) {
+    if (isPointerDownRef.current && !isDraggingRef.current) {
       const rect = containerRef.current?.getBoundingClientRect();
       const offsetX = rect ? e.clientX - rect.left : e.clientX;
       const offsetY = rect ? e.clientY - rect.top : e.clientY;
       const province = findProvinceAtScreen(offsetX, offsetY);
       if (province && province.id === selectedIdRef.current) {
-        // Toggle off: clicking the already-selected province deselects
         onSelectRef.current(null);
       } else {
         onSelectRef.current(province ? province.id : null);
       }
     }
+    isPointerDownRef.current = false;
     isDraggingRef.current = false;
   }, [findProvinceAtScreen]);
 
   const handlePointerLeave = useCallback(() => {
+    isPointerDownRef.current = false;
     isDraggingRef.current = false;
     hoverRef.current.provinceId = null;
     hoverRef.current.targetBrightness = 0;
