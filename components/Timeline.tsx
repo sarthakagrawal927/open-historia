@@ -372,92 +372,7 @@ export default function Timeline({
                       {truncate(snap.description, 22)}
                     </div>
 
-                    {/* Hover tooltip */}
-                    {hoveredId === snap.id && activeId !== snap.id && (
-                      <div
-                        className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-56 bg-slate-900/95 border border-slate-600 rounded-lg p-3 shadow-2xl backdrop-blur-lg pointer-events-none z-50"
-                        style={{ animation: "fadeIn 150ms ease-out" }}
-                      >
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="font-bold text-amber-400">
-                            Year {snap.turnYear}
-                          </span>
-                          <span className={`text-[9px] uppercase font-bold ${colors.badge}`}>
-                            {category}
-                          </span>
-                        </div>
-                        <div className="text-slate-300 text-[11px] mb-1.5 leading-relaxed">
-                          {snap.description}
-                        </div>
-                        <div className="text-slate-500 text-[10px] italic mb-1">
-                          &gt; {truncate(snap.command, 40)}
-                        </div>
-                        {snap.gameStateSlim.events.length > 0 && (
-                          <div className="border-t border-slate-700 pt-1.5 mt-1.5">
-                            <div className="text-slate-500 text-[9px] uppercase mb-1">
-                              Events
-                            </div>
-                            {snap.gameStateSlim.events.slice(0, 3).map((evt, i) => (
-                              <div
-                                key={i}
-                                className="text-slate-400 text-[10px] truncate"
-                              >
-                                {evt.description}
-                              </div>
-                            ))}
-                            {snap.gameStateSlim.events.length > 3 && (
-                              <div className="text-slate-600 text-[9px]">
-                                +{snap.gameStateSlim.events.length - 3} more
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        <div className="text-slate-600 text-[9px] mt-1.5">
-                          {formatTimestamp(snap.timestamp)}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Action popover on click */}
-                    {activeId === snap.id && !isCurrent && (
-                      <div
-                        className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-slate-900/95 border border-slate-600 rounded-lg p-2.5 shadow-2xl backdrop-blur-lg z-50 w-44"
-                        style={{ animation: "fadeIn 150ms ease-out" }}
-                      >
-                        <div className="text-amber-400 font-bold text-[11px] mb-2 text-center">
-                          Year {snap.turnYear}
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onRewind(snap.id);
-                            setActiveId(null);
-                          }}
-                          className="w-full mb-1.5 px-3 py-1.5 bg-amber-700/80 hover:bg-amber-600 text-white text-[11px] font-bold rounded transition-colors uppercase tracking-wide"
-                        >
-                          Rewind Here
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onBranch(snap.id);
-                            setActiveId(null);
-                          }}
-                          className="w-full px-3 py-1.5 bg-sky-700/80 hover:bg-sky-600 text-white text-[11px] font-bold rounded transition-colors uppercase tracking-wide"
-                        >
-                          Branch Timeline
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveId(null);
-                          }}
-                          className="w-full mt-1.5 px-3 py-1 text-slate-500 hover:text-slate-300 text-[10px] text-center transition-colors"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    )}
+                    {/* Tooltips are rendered as a portal below to escape overflow */}
                   </div>
                 );
               })}
@@ -476,19 +391,122 @@ export default function Timeline({
         </div>
       </div>
 
-      {/* Inline keyframe for tooltip fade-in */}
-      <style jsx>{`
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateX(-50%) translateY(4px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-          }
+      {/* Fixed-position tooltips (escape overflow-hidden on parent main) */}
+      {(() => {
+        const targetId = activeId || hoveredId;
+        const snap = targetId ? snapshots.find((s) => s.id === targetId) : null;
+        const pos = targetId ? layout.get(targetId) : null;
+        const scrollEl = scrollRef.current;
+        if (!snap || !pos || !scrollEl) return null;
+
+        const rect = scrollEl.getBoundingClientRect();
+        const screenX = rect.left + pos.x - scrollEl.scrollLeft;
+        const screenY = rect.top + pos.y;
+        const isCurrent = snap.id === currentSnapshotId;
+        const category = classifySnapshot(snap);
+        const colors = NODE_COLORS[category];
+
+        // Action popover (on click, non-current nodes)
+        if (activeId === snap.id && !isCurrent) {
+          return (
+            <div
+              className="fixed w-44 bg-slate-900/95 border border-slate-600 rounded-lg p-2.5 shadow-2xl backdrop-blur-lg z-[60]"
+              style={{
+                left: screenX,
+                bottom: window.innerHeight - screenY + 12,
+                transform: "translateX(-50%)",
+              }}
+            >
+              <div className="text-amber-400 font-bold text-[11px] mb-2 text-center">
+                Year {snap.turnYear}
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRewind(snap.id);
+                  setActiveId(null);
+                }}
+                className="w-full mb-1.5 px-3 py-1.5 bg-amber-700/80 hover:bg-amber-600 text-white text-[11px] font-bold rounded transition-colors uppercase tracking-wide"
+              >
+                Rewind Here
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onBranch(snap.id);
+                  setActiveId(null);
+                }}
+                className="w-full px-3 py-1.5 bg-sky-700/80 hover:bg-sky-600 text-white text-[11px] font-bold rounded transition-colors uppercase tracking-wide"
+              >
+                Branch Timeline
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveId(null);
+                }}
+                className="w-full mt-1.5 px-3 py-1 text-slate-500 hover:text-slate-300 text-[10px] text-center transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          );
         }
-      `}</style>
+
+        // Hover tooltip
+        if (hoveredId === snap.id && !activeId) {
+          return (
+            <div
+              className="fixed w-56 bg-slate-900/95 border border-slate-600 rounded-lg p-3 shadow-2xl backdrop-blur-lg pointer-events-none z-[60]"
+              style={{
+                left: screenX,
+                bottom: window.innerHeight - screenY + 12,
+                transform: "translateX(-50%)",
+              }}
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="font-bold text-amber-400">
+                  Year {snap.turnYear}
+                </span>
+                <span className={`text-[9px] uppercase font-bold ${colors.badge}`}>
+                  {category}
+                </span>
+              </div>
+              <div className="text-slate-300 text-[11px] mb-1.5 leading-relaxed">
+                {snap.description}
+              </div>
+              <div className="text-slate-500 text-[10px] italic mb-1">
+                &gt; {truncate(snap.command, 40)}
+              </div>
+              {snap.gameStateSlim.events.length > 0 && (
+                <div className="border-t border-slate-700 pt-1.5 mt-1.5">
+                  <div className="text-slate-500 text-[9px] uppercase mb-1">
+                    Events
+                  </div>
+                  {snap.gameStateSlim.events.slice(0, 3).map((evt, i) => (
+                    <div
+                      key={i}
+                      className="text-slate-400 text-[10px] truncate"
+                    >
+                      {evt.description}
+                    </div>
+                  ))}
+                  {snap.gameStateSlim.events.length > 3 && (
+                    <div className="text-slate-600 text-[9px]">
+                      +{snap.gameStateSlim.events.length - 3} more
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="text-slate-600 text-[9px] mt-1.5">
+                {formatTimestamp(snap.timestamp)}
+              </div>
+            </div>
+          );
+        }
+
+        return null;
+      })()}
     </div>
   );
 }
