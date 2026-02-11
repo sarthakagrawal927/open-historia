@@ -292,6 +292,13 @@ export default function FlatMap({
       }
     }
     pathCacheRef.current = cache;
+
+    // Rebuild state boundary lines with the new projection
+    const stateGeo = stateGeoJsonRef.current;
+    if (stateGeo) {
+      const statePathStr = svgPath(stateGeo);
+      if (statePathStr) stateLinesPathRef.current = new Path2D(statePathStr);
+    }
   }, []);
 
   // Rebuild cache when provinces change
@@ -302,14 +309,6 @@ export default function FlatMap({
   // Load sub-national state boundary lines
   const stateGeoJsonRef = useRef<d3.GeoPermissibleObjects | null>(null);
 
-  const rebuildStateLines = useCallback(() => {
-    const svgPath = pathGeneratorRef.current;
-    const geojson = stateGeoJsonRef.current;
-    if (!svgPath || !geojson) return;
-    const pathStr = svgPath(geojson);
-    if (pathStr) stateLinesPathRef.current = new Path2D(pathStr);
-  }, []);
-
   useEffect(() => {
     let cancelled = false;
     fetch("/states-110m.json")
@@ -317,16 +316,16 @@ export default function FlatMap({
       .then((topo) => {
         if (cancelled) return;
         stateGeoJsonRef.current = topojson.feature(topo, topo.objects.states) as unknown as d3.GeoPermissibleObjects;
-        rebuildStateLines();
+        // Rebuild with current projection (if ready)
+        const svgPath = pathGeneratorRef.current;
+        if (svgPath) {
+          const pathStr = svgPath(stateGeoJsonRef.current);
+          if (pathStr) stateLinesPathRef.current = new Path2D(pathStr);
+        }
       })
       .catch(() => { /* state lines are optional decoration */ });
     return () => { cancelled = true; };
-  }, [rebuildStateLines]);
-
-  // Rebuild state lines when projection changes
-  useEffect(() => {
-    rebuildStateLines();
-  }, [provinces, buildProjectionAndCache, rebuildStateLines]);
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Track Previous Owners & Detect Acquisitions
@@ -702,8 +701,8 @@ export default function FlatMap({
       }
 
       // ---- 3b. Sub-national State Boundaries (visible when zoomed in) ----
-      if (stateLinesPathRef.current && cam.zoom >= 1.5) {
-        const stateAlpha = Math.min(0.4, (cam.zoom - 1.5) * 0.3);
+      if (stateLinesPathRef.current && cam.zoom >= 1.2) {
+        const stateAlpha = Math.min(0.45, (cam.zoom - 1.2) * 0.25);
         ctx.strokeStyle = `rgba(255,255,255,${stateAlpha.toFixed(3)})`;
         ctx.lineWidth = 0.3 / cam.zoom;
         ctx.stroke(stateLinesPathRef.current);
