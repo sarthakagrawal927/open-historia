@@ -35,11 +35,11 @@
 ```
 Framework:       Next.js 16 (App Router, React 19, TypeScript)
 Styling:         Tailwind CSS 4 (dark theme, monospace aesthetic)
-Map Rendering:   D3.js + TopoJSON (Natural Earth 50m data)
+Map Rendering:   MapLibre GL JS (WebGL) via react-map-gl/maplibre
 Database:        Turso (LibSQL) + Drizzle ORM
 Authentication:  Better Auth (Google OAuth)
 AI SDKs:         @anthropic-ai/sdk, openai, @google/generative-ai
-Geo Libraries:   d3-geo, d3-delaunay, topojson-client
+Geo Libraries:   topojson-client, maplibre-gl, react-map-gl
 ```
 
 ### Project Root
@@ -69,7 +69,7 @@ Data Layer → /lib/
 └─ world-loader.ts - Map data processing
 
 Presentation → /components/
-├─ FlatMap.tsx - D3 map renderer
+├─ MapView.tsx - MapLibre GL JS map renderer (3-tier LOD)
 ├─ CommandTerminal.tsx - Terminal UI
 ├─ DiplomacyChat.tsx - Multi-threaded chat
 └─ [15+ other UI components]
@@ -107,10 +107,26 @@ Difficulty levels modify AI behavior instructions, not numerical stats:
 **History** (from commits):
 - **Initial**: 3D WebGL globe (Three.js) in `GlobeMap.tsx`
 - **Pivot**: "Replace 3D globe with animated flat map" (commit 9f158b3)
-- **Current**: D3.js flat map with sub-national provinces
-- **Reason**: Performance, hit-testing accuracy, better UX
+- **Intermediate**: D3.js Canvas2D flat map (`FlatMap.tsx`) with sub-national provinces
+- **Current**: MapLibre GL JS (WebGL) with 3-tier hierarchical LOD
+- **Reason**: Reliable hit-testing via `queryRenderedFeatures`, zoom-dependent layer visibility, better performance
 
-**Current Implementation**: `/components/FlatMap.tsx`
+**Current Implementation**: `/components/MapView.tsx`
+
+**3-Tier Level of Detail (LOD)**:
+| Tier | Zoom Range | Data | Description |
+|------|-----------|------|-------------|
+| 1 - Countries | 0–3.5 | ~240 country polygons | Merged from tier 2 provinces |
+| 2 - Regions | 2.5–6.5 | ~285 provinces | Main game entities (61 sub-national + 224 countries) |
+| 3 - States | 5.5+ | ~554 admin-1 states | Lazy-loaded from `admin1-detail.json` |
+
+**Key Architectural Decisions**:
+- Import `MapGL` (not `Map`) from `react-map-gl/maplibre` to avoid shadowing `globalThis.Map`
+- GeoJSON built in `useMemo` from `Province[]` props (no separate data pipeline)
+- Tier 3 lazy-loaded via `fetch("/admin1-detail.json")` when zoom >= 5
+- Player territory highlight: dedicated source with glow + border layers at all zoom levels
+- Relation-based borders: war (pulsing red), hostile (dashed orange), allied (subtle green)
+- Whole-country selection: clicking any sub-province highlights all sibling provinces
 
 ### 5. Progressive Feature Addition
 
@@ -194,13 +210,15 @@ Difficulty levels modify AI behavior instructions, not numerical stats:
 ### UI Components (`/components/`)
 
 ```
-FlatMap.tsx (42,810 bytes)
-├─ D3.js + TopoJSON renderer
-├─ Province hit-testing (offscreen canvas)
-├─ Dynamic coloring by ownership
-├─ Sub-national province support
-├─ Zoom/pan with auto-fit
-└─ State borders, city labels
+MapView.tsx (~1,150 lines)
+├─ MapLibre GL JS (WebGL) renderer via react-map-gl/maplibre
+├─ 3-tier hierarchical LOD (countries → regions → states)
+├─ Built-in hit-testing via queryRenderedFeatures
+├─ Dynamic coloring by ownership with player highlights
+├─ Tier 3 lazy loading (admin1-detail.json at zoom 5+)
+├─ Relation borders: war (pulsing red), hostile (orange), allied (green)
+├─ Whole-country selection on click
+└─ City labels, province labels, vignette overlay
 
 CommandTerminal.tsx (396 lines)
 ├─ Terminal-style command input
@@ -262,6 +280,7 @@ UserMenu.tsx (113 lines)
 AuthModal.tsx (80 lines)
 └─ Sign-in modal for unauthenticated users
 
+FlatMap.tsx (deprecated - replaced by MapView.tsx)
 MapCanvas.tsx (deprecated)
 GlobeMap.tsx (deprecated - old 3D globe)
 GlobeTooltip.tsx (deprecated)
@@ -342,7 +361,7 @@ map-generator.ts (13 lines - deprecated)
 
 ```
 package.json
-├─ Dependencies: Next.js, React, D3, Drizzle, Better Auth, AI SDKs
+├─ Dependencies: Next.js, React, MapLibre GL, react-map-gl, Drizzle, Better Auth, AI SDKs
 ├─ Scripts: dev, build, lint, db:generate, db:push, db:studio
 └─ Dev server starts CLI bridge: "cd server && npm install && node index.mjs &"
 
@@ -799,21 +818,30 @@ const fetchStats = async () => {
 
 ### Task 5: Modify Map Rendering
 
-**File**: `/components/FlatMap.tsx`
+**File**: `/components/MapView.tsx`
 
 **Example**: Change province border color
 
 ```typescript
-// Find the province boundary rendering code
-.attr("stroke", "#475569") // Change from slate-600 to another color
-.attr("stroke-width", 0.5)
+// Find the border layer paint property
+paint={{
+  "line-color": th.border,  // Change theme border color in THEMES object
+  "line-width": 0.8,
+}}
 ```
 
-**Testing Protocol** (from map changes guidelines):
-1. Test hit-testing (click provinces)
-2. Verify zoom/pan behavior
-3. Check province boundary rendering
+**Key Concepts**:
+- Fill layers use `["get", "fillColor"]` for data-driven colors
+- `fill-outline-color` must match fill-color to prevent cracks between polygons
+- Use `minzoom`/`maxzoom` for tier visibility
+- `interpolate` expressions handle cross-fade transitions between tiers
+
+**Testing Protocol**:
+1. Test hit-testing at all zoom levels (click provinces at zoom 1, 4, 7)
+2. Verify smooth zoom transitions between LOD tiers
+3. Check whole-country selection highlighting
 4. Test auto-zoom to player nation on game start
+5. Verify no visible cracks between adjacent polygons
 
 ### Task 6: Add Cloud Save Feature
 
@@ -1021,18 +1049,20 @@ if (data.newEvents && Array.isArray(data.newEvents)) {
 - App Router learning curve vs. Pages Router
 - Client-side state management still needed (no built-in solution)
 
-### Why D3.js for Maps?
+### Why MapLibre GL JS for Maps?
 
 **Reasons**:
-- Projection flexibility (multiple map themes planned)
-- Direct SVG/Canvas control for performance
-- Rich ecosystem for geo calculations (Voronoi, centroids, topology)
-- TopoJSON support for compact map data
+- Built-in reliable hit-testing via `queryRenderedFeatures` (no offscreen canvas needed)
+- Native zoom-dependent layer visibility with `minzoom`/`maxzoom` for hierarchical LOD
+- WebGL rendering for smooth pan/zoom at any scale
+- Data-driven styling with expressions (`["get", "fillColor"]`)
+- Free and open-source (no API key required for map rendering)
 
 **Alternatives Considered**:
 - Three.js (used initially, replaced for performance)
+- D3.js Canvas2D (used previously, had winding-order hit-testing bugs with merged MultiPolygons)
 - Leaflet (too heavy, poor hit-testing for strategy games)
-- Mapbox (proprietary, overkill for static maps)
+- Mapbox (proprietary, requires API key)
 
 ### Why Multiple AI Providers?
 
@@ -1193,28 +1223,25 @@ const restoredProvinces = freshProvinces.map(p => {
 
 **Issue**: Clicking provinces doesn't select correct territory.
 
-**Causes** (from commit "Fix: Offscreen hit-canvas for bulletproof click detection"):
-- SVG hit-testing unreliable with complex shapes
-- Borders overlap causing ambiguous clicks
+**Previous Solution** (D3/Canvas): Offscreen canvas with unique colors per province.
 
-**Solution** (in `/components/FlatMap.tsx`):
-- Offscreen canvas with unique color per province
-- Click coordinates mapped to canvas pixel
-- Pixel color decoded to province ID
-- 100% accurate, no ambiguity
+**Current Solution** (MapLibre GL JS in `/components/MapView.tsx`):
+- Uses `queryRenderedFeatures` — built-in MapLibre hit-testing
+- Set `interactiveLayerIds` to active tier fill layers
+- `onClick` reads `event.features[0].properties.id`
+- Sub-national provinces resolve to parent country for whole-country selection
+- Tier 3 (state) clicks map `regionId` back to tier 2 province
 
 ```typescript
-// Render to offscreen canvas with unique colors
-const hitCanvas = document.createElement("canvas");
-const hitCtx = hitCanvas.getContext("2d");
-provinces.forEach((province, idx) => {
-  const color = `rgb(${idx % 256}, ${Math.floor(idx / 256) % 256}, 0)`;
-  // Render province with unique color
-});
+// Interactive layers update based on loaded tiers
+const interactiveLayerIds = ["countries-fill", "regions-fill"];
+if (tier3Loaded) ids.push("states-fill");
 
-// On click
-const pixel = hitCtx.getImageData(x, y, 1, 1).data;
-const provinceIdx = pixel[0] + pixel[1] * 256;
+// Click resolves to province, then highlights whole country
+const parentId = selected.parentCountryId || String(selected.id);
+const countryProvinces = provinces.filter(
+  (p) => (p.parentCountryId || String(p.id)) === parentId
+);
 ```
 
 ### 6. OAuth Redirect Hang
@@ -1340,7 +1367,7 @@ GOOGLE_CLIENT_SECRET=your-secret
 |------|-------|
 | Add scenario preset | `/lib/presets.ts` |
 | Modify AI behavior | `/lib/ai-prompts.ts` |
-| Change map rendering | `/components/FlatMap.tsx` |
+| Change map rendering | `/components/MapView.tsx` |
 | Add UI component | `/components/NewComponent.tsx`, `/app/page.tsx` |
 | Add API endpoint | `/app/api/new-endpoint/route.ts` |
 | Modify game state types | `/lib/types.ts` |
@@ -1429,7 +1456,7 @@ When working on this codebase as an AI agent:
 - `/lib/types.ts` - Data structures
 - `/app/page.tsx` - Game orchestration
 - `/lib/game-storage.ts` - Save/load logic
-- `/components/FlatMap.tsx` - Map rendering
+- `/components/MapView.tsx` - Map rendering (MapLibre GL JS, 3-tier LOD)
 
 ### When Debugging
 

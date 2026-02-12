@@ -21,10 +21,12 @@ Traditional grand strategy games require complex menu navigation, steep learning
 - **Era-Aware**: AI adjusts for ancient empires, medieval kingdoms, or modern nation-states
 
 ### Interactive World Map
+- **3-Tier LOD**: Seamless zoom from countries to regions to individual states (MapLibre GL JS)
 - **Real Geography**: High-resolution world map with accurate borders using Natural Earth data
 - **Sub-National Provinces**: Capture regions piecemeal (e.g., "California (USA)")
-- **Click to Select**: Click nations to view info or start diplomacy
+- **Click to Select**: Click any province to highlight and interact with the whole country
 - **Multiple Themes**: Classic, cyberpunk, parchment, blueprint aesthetics
+- **Relation Borders**: War zones pulse red, hostile borders flash orange, allied borders glow green
 
 ### Diplomacy Engine
 - **Direct Chat**: Negotiate with AI leaders one-on-one
@@ -47,7 +49,7 @@ Traditional grand strategy games require complex menu navigation, steep learning
 graph TB
     subgraph "Frontend (Next.js 16 + React 19)"
         UI[UI Components]
-        Map[Interactive Map<br/>D3.js + Natural Earth]
+        Map[Interactive Map<br/>MapLibre GL JS + Natural Earth]
         Game[Game State Manager]
         UI --> Map
         UI --> Game
@@ -124,7 +126,7 @@ graph TB
 ### Tech Stack
 
 - **Next.js 16** + React 19 + TypeScript
-- **D3.js** for map rendering (Natural Earth 50m data)
+- **MapLibre GL JS** for WebGL map rendering with hierarchical LOD (Natural Earth 50m data)
 - **Tailwind CSS 4** for dark-themed UI
 - **Turso + Drizzle** for cloud saves (optional)
 - **Better Auth** with Google OAuth (optional)
@@ -132,7 +134,7 @@ graph TB
 
 ### Key Components
 
-- **Frontend**: React components with Three.js/D3.js map visualization
+- **Frontend**: React components with MapLibre GL JS (WebGL) map visualization
 - **API Routes**: Next.js API routes handle AI provider calls, game logic, and data persistence
 - **Game Engine**: Client-side game state management with turn-based execution
 - **AI Integration**: Unified interface to multiple AI providers with prompt engineering

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import CommandTerminal from "@/components/CommandTerminal";
-import FlatMap from "@/components/FlatMap";
+import MapView from "@/components/MapView";
 import GameSetup, { GameConfig } from "@/components/GameSetup";
 import DiplomacyChat from "@/components/DiplomacyChat";
 import Timeline from "@/components/Timeline";
@@ -882,9 +882,9 @@ export default function GamePage({ initialGameId }: { initialGameId?: string } =
 
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-slate-950 text-slate-100">
-      {/* Flat Map */}
+      {/* Map */}
       {gameState && (
-        <FlatMap
+        <MapView
           provinces={gameState.provinces}
           players={gameState.players}
           onSelectProvince={handleSelectProvince}

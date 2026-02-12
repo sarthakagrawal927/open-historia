@@ -281,6 +281,97 @@ async function main() {
   const sizeMB = (output.length / 1024 / 1024).toFixed(2);
   console.log(`\nDone! Output: ${outputPath} (${sizeMB} MB)`);
   console.log(`Total provinces: ${allFeatures.length} (${subProvinceCount} sub-national + ${countryCount} countries)`);
+
+  // 9. Build tier 3 detail data (individual admin-1 states for subdivided countries)
+  console.log("\nStep 7: Building admin1-detail.json (tier 3)...");
+  const detailFeatures = [];
+
+  // For each subdivided country, emit individual admin-1 features
+  for (const [adm0Code, config] of Object.entries(SUBDIVIDE_COUNTRIES)) {
+    const countryAdmin1 = admin1Geo.features.filter((f) => {
+      const a3 = (f.properties.adm0_a3 || f.properties.gu_a3 || f.properties.sov_a3 || "").toUpperCase();
+      return a3 === adm0Code;
+    });
+
+    if (countryAdmin1.length === 0) continue;
+
+    for (const feature of countryAdmin1) {
+      // Determine which region this state belongs to
+      let regionId = `${adm0Code}__rest`;
+      for (const region of config.regions) {
+        if (region.slug === "_rest") continue;
+        if (region.match(feature.properties)) {
+          regionId = `${adm0Code}_${region.slug}`;
+          break;
+        }
+      }
+      // If not matched by named regions, assign to _rest
+      if (regionId === `${adm0Code}__rest`) {
+        const restRegion = config.regions.find((r) => r.slug === "_rest");
+        if (restRegion) {
+          regionId = `${adm0Code}__rest`;
+        } else {
+          regionId = `${adm0Code}_${config.regions[config.regions.length - 1].slug}`;
+        }
+      }
+
+      const stateName = feature.properties.name || feature.properties.name_en || "Unknown";
+      const stateId = `${adm0Code}_state_${(feature.properties.iso_3166_2 || stateName).replace(/[^a-zA-Z0-9]/g, "_")}`;
+
+      detailFeatures.push({
+        type: "Feature",
+        geometry: feature.geometry,
+        properties: {
+          stateId,
+          displayName: stateName,
+          regionId,
+          parentCountryId: config.isoNumeric,
+          parentCountryName: config.parentName,
+          color: config.color,
+        },
+      });
+    }
+  }
+
+  // Non-subdivided countries: include as-is (same geometry as tier 2)
+  for (const feature of worldGeo.features) {
+    const rawId = feature.id != null ? String(feature.id).padStart(3, "0") : "";
+    if (!rawId || rawId === "010") continue;
+    if (SUBDIVIDED_ISO_CODES.has(rawId)) continue;
+
+    const name = COUNTRY_NAMES[rawId] || `Region ${rawId}`;
+    const color = NATION_COLORS[rawId] || "#4a5568";
+
+    detailFeatures.push({
+      type: "Feature",
+      geometry: feature.geometry,
+      properties: {
+        stateId: rawId,
+        displayName: name,
+        regionId: rawId,
+        parentCountryId: rawId,
+        parentCountryName: name,
+        color,
+      },
+    });
+  }
+
+  console.log(`  Tier 3 features: ${detailFeatures.length}`);
+
+  // Convert to TopoJSON and simplify
+  const detailGeoJSON = { type: "FeatureCollection", features: detailFeatures };
+  const detailTopo = topojsonServer.topology({ states: detailGeoJSON }, 1e5);
+  const detailPresimplified = topojsonSimplify.presimplify(detailTopo);
+  const detailMinWeight = topojsonSimplify.quantile(detailPresimplified, 0.01);
+  const detailSimplified = topojsonSimplify.simplify(detailPresimplified, detailMinWeight);
+
+  const detailOutputPath = path.join(PUBLIC_DIR, "admin1-detail.json");
+  const detailOutput = JSON.stringify(detailSimplified);
+  fs.writeFileSync(detailOutputPath, detailOutput);
+
+  const detailSizeMB = (detailOutput.length / 1024 / 1024).toFixed(2);
+  console.log(`  Output: ${detailOutputPath} (${detailSizeMB} MB)`);
+  console.log(`  Total tier 3 features: ${detailFeatures.length}`);
 }
 
 // ── Inline data loaders (extracted from world-loader.ts) ──────────────────

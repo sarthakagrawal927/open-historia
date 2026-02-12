@@ -517,7 +517,7 @@ export default function DiplomacyChat({
 
     // Use the owner's name if owned by AI, otherwise use province name as nation
     const owner = province.ownerId ? players[province.ownerId] : null;
-    const nationName = owner?.name ?? province.name;
+    const nationName = owner?.name ?? (province.parentCountryName || province.name);
 
     // Skip generic/small regions
     if (province.name.startsWith("Region") || province.name === "Antarctica") return null;
