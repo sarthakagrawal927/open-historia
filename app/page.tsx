@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import CommandTerminal from "@/components/CommandTerminal";
 import FlatMap from "@/components/FlatMap";
 import GameSetup, { GameConfig } from "@/components/GameSetup";
 import DiplomacyChat from "@/components/DiplomacyChat";
 import Timeline from "@/components/Timeline";
 import Advisor from "@/components/Advisor";
+import RelationsPanel from "@/components/RelationsPanel";
 import PresetBrowser from "@/components/PresetBrowser";
 import PromptSettings, { loadPromptOverrides } from "@/components/PromptSettings";
 import { loadWorldData } from "@/lib/world-loader";
@@ -94,6 +95,19 @@ export default function GamePage({ initialGameId }: { initialGameId?: string } =
   const [advisorMessages, setAdvisorMessages] = useState<AdvisorMessage[]>([]);
   const [processingChat, setProcessingChat] = useState(false);
   const [processingAdvisor, setProcessingAdvisor] = useState(false);
+
+  // ── Year flash tracking ────────────────────────────────────────────────
+  const prevTurnRef = useRef<number | null>(null);
+  const [yearFlash, setYearFlash] = useState(false);
+
+  useEffect(() => {
+    if (gameState && prevTurnRef.current !== null && prevTurnRef.current !== gameState.turn) {
+      setYearFlash(true);
+      const timer = setTimeout(() => setYearFlash(false), 600);
+      return () => clearTimeout(timer);
+    }
+    if (gameState) prevTurnRef.current = gameState.turn;
+  }, [gameState?.turn]);
 
   // ── Auth ────────────────────────────────────────────────────────────────
   const { data: authSession } = authClient.useSession();
@@ -881,7 +895,7 @@ export default function GamePage({ initialGameId }: { initialGameId?: string } =
 
       {/* Command Terminal + Advance Button (bottom-left) */}
       <div style={{ position: "absolute", bottom: timelineSnapshots.length > 0 ? 140 : 16, left: 16, zIndex: 20 }}>
-        <CommandTerminal logs={logs} onCommand={queueOrder} />
+        <CommandTerminal logs={logs} onCommand={queueOrder} processing={processingTurn} />
         {/* Inline advance bar below terminal */}
         <div className="mt-1 flex items-center gap-2 bg-slate-900/90 border border-slate-700 rounded px-2 py-1.5 backdrop-blur font-mono">
           {pendingOrders.length > 0 && (
@@ -904,7 +918,7 @@ export default function GamePage({ initialGameId }: { initialGameId?: string } =
           <button
             onClick={handleNextTurn}
             disabled={processingTurn}
-            className="bg-amber-700 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-bold px-4 py-1 rounded transition-colors uppercase"
+            className={`bg-amber-700 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-bold px-4 py-1 rounded transition-colors uppercase ${processingTurn ? "animate-pulse-glow" : ""}`}
           >
             {processingTurn ? "Processing..." : "Advance"}
           </button>
@@ -932,16 +946,34 @@ export default function GamePage({ initialGameId }: { initialGameId?: string } =
         />
       )}
 
-      {/* Processing indicator */}
+      {/* Relations Panel (bottom-right) */}
+      {gameState && relations.length > 0 && (
+        <div
+          className="absolute right-4 z-20"
+          style={{ bottom: timelineSnapshots.length > 0 ? 140 : 16 }}
+        >
+          <RelationsPanel
+            relations={relations}
+            playerNationName={gameState.players["player"].name}
+            provinces={gameState.provinces}
+          />
+        </div>
+      )}
+
+      {/* Processing overlay — subtle scanline sweep */}
       {processingTurn && (
-        <div className="absolute bottom-20 left-4 text-xs text-amber-500 animate-pulse font-mono bg-slate-900/80 px-2 py-1 rounded z-20">
-          [Processing...]
+        <div className="absolute inset-0 z-30 pointer-events-none overflow-hidden">
+          <div
+            className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-amber-500/30 to-transparent"
+            style={{ animation: "scanline 2s linear infinite" }}
+          />
+          <div className="absolute inset-0 bg-slate-950/10" />
         </div>
       )}
 
       {/* Save notification */}
       {showSaveNotif && (
-        <div className="absolute top-20 right-4 text-sm text-emerald-400 font-mono bg-slate-900/90 px-3 py-2 rounded border border-emerald-700 shadow-lg animate-fade-in z-40">
+        <div className="absolute top-20 right-4 text-sm text-emerald-400 font-mono bg-slate-900/90 px-3 py-2 rounded border border-emerald-700 shadow-lg animate-slide-down z-40">
           Game Saved
         </div>
       )}
@@ -950,7 +982,7 @@ export default function GamePage({ initialGameId }: { initialGameId?: string } =
       {gameState && (
         <div className="absolute top-0 left-0 w-full p-2 bg-gradient-to-b from-slate-950/90 to-transparent pointer-events-none flex justify-center items-center gap-8 text-slate-200 font-mono text-lg z-10">
           <div className="bg-slate-900/80 px-4 py-2 rounded-full border border-slate-700 backdrop-blur pointer-events-auto flex items-center gap-4">
-            <div>
+            <div className={yearFlash ? "animate-flash-border rounded px-1 -mx-1" : ""}>
               <span className="text-slate-500 text-sm uppercase mr-2">Year</span>
               <span className="font-bold">{gameState.turn}</span>
             </div>
@@ -1015,9 +1047,9 @@ export default function GamePage({ initialGameId }: { initialGameId?: string } =
               <button
                 onClick={handleNextTurn}
                 disabled={processingTurn}
-                className="bg-amber-700 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-bold px-3 py-1 rounded transition-colors uppercase"
+                className={`bg-amber-700 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-bold px-3 py-1 rounded transition-colors uppercase ${processingTurn ? "animate-pulse-glow" : ""}`}
               >
-                Advance
+                {processingTurn ? "Processing..." : "Advance"}
               </button>
             </div>
           </div>
