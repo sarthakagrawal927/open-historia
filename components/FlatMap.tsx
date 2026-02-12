@@ -2,7 +2,6 @@
 
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import * as d3 from "d3-geo";
-import * as topojson from "topojson-client";
 import { Province, Player, MapTheme, DiplomaticRelation } from "@/lib/types";
 import { WORLD_CITIES } from "@/lib/cities";
 import Tooltip from "./Tooltip";
@@ -210,7 +209,6 @@ export default function FlatMap({
   // Projected bounds of the map in projection-space coordinates (set by buildProjectionAndCache)
   const mapBoundsRef = useRef({ left: 0, top: 0, right: 1920, bottom: 1080 });
   const hoverRef = useRef<HoverState>({ provinceId: null, brightness: 0, targetBrightness: 0 });
-  const stateLinesPathRef = useRef<Path2D | null>(null);
   const acquisitionsRef = useRef<AcquisitionAnim[]>([]);
   const didInitialZoomRef = useRef(false);
   const prevOwnersRef = useRef<Map<string | number, string | null>>(new Map());
@@ -294,12 +292,6 @@ export default function FlatMap({
     }
     pathCacheRef.current = cache;
 
-    // Rebuild state boundary lines with the new projection
-    const stateGeo = stateGeoJsonRef.current;
-    if (stateGeo) {
-      const statePathStr = svgPath(stateGeo);
-      if (statePathStr) stateLinesPathRef.current = new Path2D(statePathStr);
-    }
   }, []);
 
   // Rebuild cache when provinces change
@@ -307,26 +299,8 @@ export default function FlatMap({
     buildProjectionAndCache();
   }, [provinces, buildProjectionAndCache]);
 
-  // Load sub-national state boundary lines
-  const stateGeoJsonRef = useRef<d3.GeoPermissibleObjects | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/states-110m.json")
-      .then((r) => r.json())
-      .then((topo) => {
-        if (cancelled) return;
-        stateGeoJsonRef.current = topojson.feature(topo, topo.objects.states) as unknown as d3.GeoPermissibleObjects;
-        // Rebuild with current projection (if ready)
-        const svgPath = pathGeneratorRef.current;
-        if (svgPath) {
-          const pathStr = svgPath(stateGeoJsonRef.current);
-          if (pathStr) stateLinesPathRef.current = new Path2D(pathStr);
-        }
-      })
-      .catch(() => { /* state lines are optional decoration */ });
-    return () => { cancelled = true; };
-  }, []);
+  // Sub-national provinces are now part of provinces-combined.json,
+  // so we no longer need a separate state-lines overlay.
 
   // ---------------------------------------------------------------------------
   // Track Previous Owners & Detect Acquisitions
@@ -440,22 +414,24 @@ export default function FlatMap({
   // ---------------------------------------------------------------------------
 
   const findProvinceAtScreen = useCallback((screenX: number, screenY: number): Province | null => {
-    const projection = projectionRef.current;
-    if (!projection) return null;
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
 
     const cam = cameraRef.current;
+    const pathCache = pathCacheRef.current;
 
     // Convert screen coords to map coords (undo camera transform)
     const mapX = (screenX - cam.x) / cam.zoom;
     const mapY = (screenY - cam.y) / cam.zoom;
 
-    // Invert projection to get [lon, lat]
-    const lonLat = projection.invert?.([mapX, mapY]);
-    if (!lonLat) return null;
-
+    // Use Path2D isPointInPath for pixel-perfect hit-testing against rendered geometry
     const provs = provincesRef.current;
+    // Test smaller (sub-national) provinces first so they take priority over any overlaps
     for (let i = 0; i < provs.length; i++) {
-      if (provs[i].feature && d3.geoContains(provs[i].feature, lonLat)) {
+      const path2d = pathCache.get(provs[i].id);
+      if (path2d && ctx.isPointInPath(path2d, mapX, mapY)) {
         return provs[i];
       }
     }
@@ -727,26 +703,32 @@ export default function FlatMap({
           ctx.restore();
         }
 
-        // Player-owned territory: distinct bright border
+        // Borders: differentiate international vs sub-national
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+
         if (p.ownerId === "player") {
+          // Player territory: distinct amber border
           ctx.strokeStyle = "rgba(245,158,11,0.6)";
-          ctx.lineWidth = 1.5 / cam.zoom;
+          ctx.lineWidth = (p.isSubNational ? 1.0 : 1.5) / cam.zoom;
+          ctx.stroke(path2d);
+        } else if (isHovered && !isSelected) {
+          ctx.strokeStyle = brighten(th.border, 0.5);
+          ctx.lineWidth = 1.0 / cam.zoom;
+          ctx.stroke(path2d);
+        } else if (p.isSubNational) {
+          // Sub-national: thinner, more subtle border
+          ctx.strokeStyle = `rgba(255,255,255,0.08)`;
+          ctx.lineWidth = 0.3 / cam.zoom;
           ctx.stroke(path2d);
         } else {
-          // Border (hovered provinces get a brighter border)
-          ctx.strokeStyle = isHovered && !isSelected ? brighten(th.border, 0.5) : th.border;
-          ctx.lineWidth = (isHovered && !isSelected ? 1.0 : 0.5) / cam.zoom;
+          // International border: standard
+          ctx.strokeStyle = th.border;
+          ctx.lineWidth = 0.5 / cam.zoom;
           ctx.stroke(path2d);
         }
       }
 
-      // ---- 3b. Sub-national State Boundaries ----
-      if (stateLinesPathRef.current) {
-        const stateAlpha = Math.min(0.35, 0.12 + cam.zoom * 0.04);
-        ctx.strokeStyle = `rgba(255,255,255,${stateAlpha.toFixed(3)})`;
-        ctx.lineWidth = 0.4 / cam.zoom;
-        ctx.stroke(stateLinesPathRef.current);
-      }
 
       // ---- 4. War Zone Borders (pulsing red) ----
       if (warPairs.size > 0) {
