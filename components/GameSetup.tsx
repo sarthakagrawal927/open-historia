@@ -336,40 +336,40 @@ export default function GameSetup({ provinces, onStartGame, onBack, preset }: Ga
                 </div>
               </div>
 
-              {/* Year & Difficulty */}
-              <div className="flex space-x-4 mt-4">
-                <div className="w-1/3">
-                  <label className="text-xs text-gray-400 ml-1 mb-1 block">Year</label>
-                  <input
-                    type="number"
-                    value={isNaN(year) ? "" : year}
-                    onChange={e => setYear(parseInt(e.target.value))}
-                    className="w-full bg-[#1E2538] border-none rounded-xl py-3 px-4 text-center text-sm font-mono font-bold text-white shadow-inner focus:ring-2 focus:ring-orange-500 outline-none"
-                  />
-                </div>
-                <div className="w-2/3">
-                  <label className="text-xs text-gray-400 ml-1 mb-1 block">Difficulty</label>
-                  <div className="flex bg-[#1E2538] rounded-xl p-1 shadow-inner h-[44px]">
-                    {DIFFICULTY_OPTIONS.map(opt => {
-                      const isActive = difficulty === opt.value;
-                      return (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() => setDifficulty(opt.value)}
-                          className={`flex-1 rounded-lg text-[11px] font-medium flex items-center justify-center gap-1 transition-all duration-200 ${
-                            isActive
-                              ? "bg-gray-700 shadow-sm text-white"
-                              : "text-gray-500 hover:text-gray-300"
-                          }`}
-                          title={opt.label}
-                        >
-                          <span className="text-sm">{opt.icon}</span>
-                          <span>{opt.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
+              {/* Year */}
+              <div className="mt-4">
+                <label className="text-xs text-gray-400 ml-1 mb-1 block">Start Year</label>
+                <input
+                  type="number"
+                  value={isNaN(year) ? "" : year}
+                  onChange={e => setYear(parseInt(e.target.value))}
+                  className="w-full bg-[#1E2538] border-none rounded-xl py-3 px-4 text-sm font-mono font-bold text-white shadow-inner focus:ring-2 focus:ring-orange-500 outline-none"
+                />
+              </div>
+
+              {/* Difficulty */}
+              <div className="mt-4">
+                <label className="text-xs text-gray-400 ml-1 mb-1 block">Difficulty</label>
+                <div className="flex bg-[#1E2538] rounded-xl p-1 shadow-inner h-[44px]">
+                  {DIFFICULTY_OPTIONS.map(opt => {
+                    const isActive = difficulty === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setDifficulty(opt.value)}
+                        className={`flex-1 rounded-lg text-[11px] font-medium flex items-center justify-center gap-1 transition-all duration-200 whitespace-nowrap ${
+                          isActive
+                            ? "bg-gray-700 shadow-sm text-white"
+                            : "text-gray-500 hover:text-gray-300"
+                        }`}
+                        title={opt.label}
+                      >
+                        <span className="text-sm">{opt.icon}</span>
+                        <span>{opt.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </Card>
