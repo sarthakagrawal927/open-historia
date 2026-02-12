@@ -54,7 +54,8 @@ const MODELS: Record<Provider, { id: string; name: string }[]> = {
   ],
 };
 
-const DEFAULT_PROVIDER: Provider = "local";
+const isLocalhost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+const DEFAULT_PROVIDER: Provider = isLocalhost ? "local" : "deepseek";
 
 const getProviderStorageKey = (provider: Provider) => `oh_key_${provider}`;
 
@@ -199,7 +200,7 @@ export default function GameSetup({
                             onChange={e => handleProviderChange(e.target.value as Provider)}
                             className="w-full bg-slate-950 border border-slate-600 rounded p-2 text-slate-100 focus:border-amber-500 outline-none"
                         >
-                            <option value="local">Local CLI Bridge (No Key)</option>
+                            {isLocalhost && <option value="local">Local CLI Bridge (No Key)</option>}
                             <option value="deepseek">DeepSeek (New)</option>
                             <option value="google">Google Gemini</option>
                             <option value="openai">OpenAI</option>
