@@ -5,6 +5,8 @@ import { PRESETS, PRESET_CATEGORIES, getPresetsByCategory } from "@/lib/presets"
 import type { Preset } from "@/lib/types";
 import type { SavedGame } from "@/lib/game-storage";
 import SavedGamesList from "./SavedGamesList";
+import AuthModal from "./AuthModal";
+import UserMenu from "./UserMenu";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -16,6 +18,8 @@ interface PresetBrowserProps {
   onLoadSavedGame?: (saveId: string) => void;
   onDeleteSavedGame?: (saveId: string) => void;
   getNationName?: (id: string) => string;
+  authSession?: { user: { name: string; email: string } } | null;
+  onRefreshSavedGames?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -264,11 +268,14 @@ export default function PresetBrowser({
   onLoadSavedGame,
   onDeleteSavedGame,
   getNationName,
+  authSession,
+  onRefreshSavedGames,
 }: PresetBrowserProps) {
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [headerVisible, setHeaderVisible] = useState(false);
   const [tabsVisible, setTabsVisible] = useState(false);
   const [footerVisible, setFooterVisible] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Staggered mount animation
@@ -318,8 +325,30 @@ export default function PresetBrowser({
         aria-hidden="true"
       />
 
+      {/* Auth Modal */}
+      <AuthModal
+        open={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={() => onRefreshSavedGames?.()}
+      />
+
       {/* Content wrapper */}
       <div className="relative z-10 flex flex-col h-full">
+        {/* Auth bar (top-right) */}
+        <div className="absolute top-4 right-6 z-20">
+          {authSession?.user ? (
+            <UserMenu user={authSession.user} onRefreshSaves={onRefreshSavedGames} />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowAuthModal(true)}
+              className="text-xs uppercase font-bold px-3 py-1.5 bg-amber-800/60 hover:bg-amber-700/70 text-amber-300 border border-amber-700/50 rounded-lg transition-colors"
+            >
+              Sign In
+            </button>
+          )}
+        </div>
+
         {/* ----------------------------------------------------------------- */}
         {/* Header                                                            */}
         {/* ----------------------------------------------------------------- */}

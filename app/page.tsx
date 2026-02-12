@@ -30,8 +30,10 @@ import {
   loadGame,
   deleteGame,
   restoreSavedGameState,
+  setAuthenticated,
   SavedGame,
 } from "@/lib/game-storage";
+import { authClient } from "@/lib/auth-client";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -51,7 +53,7 @@ function uid(): string {
 // Main
 // ---------------------------------------------------------------------------
 
-export default function GamePage() {
+export default function GamePage({ initialGameId }: { initialGameId?: string } = {}) {
   // ── Core State ──────────────────────────────────────────────────────────
   const [gameConfig, setGameConfig] = useState<GameConfig | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -92,40 +94,44 @@ export default function GamePage() {
   const [processingChat, setProcessingChat] = useState(false);
   const [processingAdvisor, setProcessingAdvisor] = useState(false);
 
+  // ── Auth ────────────────────────────────────────────────────────────────
+  const { data: authSession } = authClient.useSession();
+
+  useEffect(() => {
+    setAuthenticated(!!authSession?.user);
+  }, [authSession]);
+
   // ── Initialization ──────────────────────────────────────────────────────
 
-  const refreshSavedGames = useCallback(() => {
+  const refreshSavedGames = useCallback(async () => {
     if (typeof window === "undefined") return;
-    setSavedGames(listSavedGames());
+    const saves = await listSavedGames();
+    setSavedGames(saves);
   }, []);
 
   useEffect(() => {
     async function load() {
       const data = await loadWorldData();
       setProvincesCache(data);
-      refreshSavedGames();
+      await refreshSavedGames();
 
-      // Auto-load game from URL query parameter
-      if (typeof window !== "undefined") {
-        const params = new URLSearchParams(window.location.search);
-        const gameId = params.get("game");
-        if (gameId) {
-          const saved = loadGame(gameId);
-          if (saved && data.length > 0) {
-            const restoredState = restoreSavedGameState(saved, data);
-            setGameConfig(saved.gameConfig);
-            setGameState(restoredState);
-            setProvincesCache(restoredState.provinces);
-            setEvents(saved.events || []);
-            setStorySoFar(saved.storySoFar || "");
-            setShowPresets(false);
-            setCurrentGameId(gameId);
-            const restoredLogs = saved.logs?.length ? saved.logs : [];
-            setLogs([
-              ...restoredLogs,
-              { id: uid(), type: "success", text: `Resumed game from ${new Date(saved.timestamp).toLocaleString()}.` },
-            ]);
-          }
+      // Auto-load game from URL path (e.g. /<gameId>)
+      if (initialGameId) {
+        const saved = await loadGame(initialGameId);
+        if (saved && data.length > 0) {
+          const restoredState = restoreSavedGameState(saved, data);
+          setGameConfig(saved.gameConfig);
+          setGameState(restoredState);
+          setProvincesCache(restoredState.provinces);
+          setEvents(saved.events || []);
+          setStorySoFar(saved.storySoFar || "");
+          setShowPresets(false);
+          setCurrentGameId(initialGameId);
+          const restoredLogs = saved.logs?.length ? saved.logs : [];
+          setLogs([
+            ...restoredLogs,
+            { id: uid(), type: "success", text: `Resumed game from ${new Date(saved.timestamp).toLocaleString()}.` },
+          ]);
         }
       }
 
@@ -157,7 +163,7 @@ export default function GamePage() {
   const handleStartGame = (config: GameConfig) => {
     const gameId = uid();
     setCurrentGameId(gameId);
-    window.history.replaceState(null, "", `?game=${gameId}`);
+    window.history.replaceState(null, "", `/${gameId}`);
 
     setGameConfig(config);
 
@@ -686,19 +692,19 @@ export default function GamePage() {
 
   // ── Save / Load ─────────────────────────────────────────────────────────
 
-  const handleSaveGame = () => {
+  const handleSaveGame = async () => {
     if (!gameState || !gameConfig) return;
     try {
       const id = currentGameId || uid();
       if (!currentGameId) {
         setCurrentGameId(id);
-        window.history.replaceState(null, "", `?game=${id}`);
+        window.history.replaceState(null, "", `/${id}`);
       }
-      saveGame(gameState, gameConfig, logs, id, events, storySoFar);
+      await saveGame(gameState, gameConfig, logs, id, events, storySoFar);
       setLastSaveTime(Date.now());
       setShowSaveNotif(true);
       setTimeout(() => setShowSaveNotif(false), 2000);
-      refreshSavedGames();
+      await refreshSavedGames();
       addLog("Game saved.", "success");
     } catch (error) {
       addLog(
@@ -708,11 +714,11 @@ export default function GamePage() {
     }
   };
 
-  const handleLoadSavedGame = (saveId: string) => {
-    const saved = loadGame(saveId);
+  const handleLoadSavedGame = async (saveId: string) => {
+    const saved = await loadGame(saveId);
     if (!saved) {
       addLog(`Save "${saveId}" not found.`, "error");
-      refreshSavedGames();
+      await refreshSavedGames();
       return;
     }
     if (provincesCache.length === 0) {
@@ -728,7 +734,7 @@ export default function GamePage() {
     setStorySoFar(saved.storySoFar || "");
     setShowPresets(false);
     setCurrentGameId(saveId);
-    window.history.replaceState(null, "", `?game=${saveId}`);
+    window.history.replaceState(null, "", `/${saveId}`);
 
     const restoredLogs = saved.logs?.length ? saved.logs : [];
     setLogs([
@@ -738,9 +744,29 @@ export default function GamePage() {
     setShowSavesPanel(false);
   };
 
-  const handleDeleteSavedGame = (saveId: string) => {
-    deleteGame(saveId);
-    refreshSavedGames();
+  const handleSaveAndExit = async () => {
+    if (!gameState || !gameConfig) return;
+    await handleSaveGame();
+    // Reset to setup screen
+    setGameConfig(null);
+    setGameState(null);
+    setShowPresets(true);
+    setCurrentGameId(null);
+    setLogs([]);
+    setEvents([]);
+    setStorySoFar("");
+    setChatThreads([]);
+    setRelations([]);
+    setTimelineSnapshots([]);
+    setAdvisorMessages([]);
+    setPendingOrders([]);
+    window.history.replaceState(null, "", "/");
+    await refreshSavedGames();
+  };
+
+  const handleDeleteSavedGame = async (saveId: string) => {
+    await deleteGame(saveId);
+    await refreshSavedGames();
     if (gameConfig) addLog(`Deleted save: ${saveId}`, "info");
   };
 
@@ -748,8 +774,7 @@ export default function GamePage() {
   useEffect(() => {
     if (!gameState || !gameConfig) return;
     autoSave(gameState, gameConfig, logs, events, 2000, currentGameId || "autosave", storySoFar);
-    refreshSavedGames();
-  }, [gameState, gameConfig, logs, events, refreshSavedGames, currentGameId, storySoFar]);
+  }, [gameState, gameConfig, logs, events, currentGameId, storySoFar]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -780,6 +805,8 @@ export default function GamePage() {
         onLoadSavedGame={handleLoadSavedGame}
         onDeleteSavedGame={handleDeleteSavedGame}
         getNationName={getNationLabel}
+        authSession={authSession}
+        onRefreshSavedGames={refreshSavedGames}
       />
     );
   }
@@ -930,6 +957,13 @@ export default function GamePage() {
               title={lastSaveTime ? `Last: ${new Date(lastSaveTime).toLocaleString()}` : "Save"}
             >
               Save
+            </button>
+            <button
+              onClick={handleSaveAndExit}
+              className="bg-rose-800 hover:bg-rose-700 text-white text-xs font-bold px-3 py-1 rounded transition-colors uppercase"
+              title="Save game and return to main menu"
+            >
+              Save & Exit
             </button>
             <button
               onClick={() => {

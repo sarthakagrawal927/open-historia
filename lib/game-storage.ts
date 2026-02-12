@@ -60,6 +60,24 @@ const toSnapshot = (gameState: GameState): GameStateSnapshot => ({
   })),
 });
 
+// ---------------------------------------------------------------------------
+// Auth state (set from page.tsx when session changes)
+// ---------------------------------------------------------------------------
+
+let _authenticated = false;
+
+export function setAuthenticated(value: boolean) {
+  _authenticated = value;
+}
+
+export function isAuthenticated(): boolean {
+  return _authenticated;
+}
+
+// ---------------------------------------------------------------------------
+// Restore (synchronous, unchanged)
+// ---------------------------------------------------------------------------
+
 export function restoreSavedGameState(savedGame: SavedGame, baseProvinces: Province[]): GameState {
   const persistedState = savedGame.gameState;
   if (isLegacyGameState(persistedState)) {
@@ -88,7 +106,11 @@ export function restoreSavedGameState(savedGame: SavedGame, baseProvinces: Provi
   };
 }
 
-export function saveGame(
+// ---------------------------------------------------------------------------
+// localStorage backend (renamed from original)
+// ---------------------------------------------------------------------------
+
+export function localSaveGame(
   gameState: GameState,
   gameConfig: GameConfig,
   logs: LogEntry[],
@@ -97,7 +119,7 @@ export function saveGame(
   storySoFar?: string
 ): string {
   try {
-    const saves = listSavedGames();
+    const saves = localListSavedGames();
     const id = saveName || createSaveId();
     const filtered = saves.filter((save) => save.id !== id);
 
@@ -123,9 +145,9 @@ export function saveGame(
   }
 }
 
-export function loadGame(id: string): SavedGame | null {
+export function localLoadGame(id: string): SavedGame | null {
   try {
-    const saves = listSavedGames();
+    const saves = localListSavedGames();
     return saves.find((save) => save.id === id) || null;
   } catch (error) {
     console.error("Failed to load game:", error);
@@ -133,7 +155,7 @@ export function loadGame(id: string): SavedGame | null {
   }
 }
 
-export function listSavedGames(): SavedGame[] {
+export function localListSavedGames(): SavedGame[] {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
     if (!data) return [];
@@ -156,7 +178,6 @@ export function listSavedGames(): SavedGame[] {
 
     saves.sort((a, b) => b.timestamp - a.timestamp);
 
-    // Keep the latest snapshot per save id (important for legacy duplicate autosaves).
     const uniqueById: SavedGame[] = [];
     const seen = new Set<string>();
     saves.forEach((save) => {
@@ -172,9 +193,9 @@ export function listSavedGames(): SavedGame[] {
   }
 }
 
-export function deleteGame(id: string): void {
+export function localDeleteGame(id: string): void {
   try {
-    const saves = listSavedGames();
+    const saves = localListSavedGames();
     const filtered = saves.filter((save) => save.id !== id);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
   } catch (error) {
@@ -182,10 +203,205 @@ export function deleteGame(id: string): void {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Cloud backend (calls API routes)
+// ---------------------------------------------------------------------------
+
+async function cloudSaveGame(
+  gameState: GameState,
+  gameConfig: GameConfig,
+  logs: LogEntry[],
+  saveName?: string,
+  events: GameEvent[] = [],
+  storySoFar?: string
+): Promise<string> {
+  const id = saveName || createSaveId();
+  const res = await fetch("/api/saves", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id,
+      timestamp: Date.now(),
+      version: VERSION,
+      gameState: toSnapshot(gameState),
+      gameConfig, // apiKey stripped server-side
+      logs: logs.slice(-50),
+      events: events.slice(-100),
+      storySoFar,
+    }),
+  });
+  if (!res.ok) throw new Error(`Cloud save failed: ${res.status}`);
+  return id;
+}
+
+async function cloudLoadGame(id: string): Promise<SavedGame | null> {
+  const res = await fetch(`/api/saves/${encodeURIComponent(id)}`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  const save = data.save;
+  if (!save) return null;
+
+  // Re-inject apiKey from localStorage
+  if (save.gameConfig && typeof save.gameConfig === "object") {
+    const provider = save.gameConfig.provider;
+    if (provider && provider !== "local") {
+      const storageKey = `oh_key_${provider}`;
+      try {
+        const { decryptKey } = await import("@/lib/crypto");
+        const encrypted = localStorage.getItem(storageKey);
+        if (encrypted) {
+          const decrypted = decryptKey(encrypted);
+          if (decrypted) {
+            save.gameConfig.apiKey = decrypted;
+          }
+        }
+      } catch {
+        // Can't re-inject key, user will need to re-enter
+      }
+    }
+  }
+
+  return {
+    id: save.id,
+    timestamp: save.timestamp,
+    gameState: save.gameState,
+    gameConfig: save.gameConfig,
+    logs: save.logs || [],
+    events: save.events || [],
+    storySoFar: save.storySoFar,
+    version: save.version || "2.0.0",
+  };
+}
+
+async function cloudListSavedGames(): Promise<SavedGame[]> {
+  const res = await fetch("/api/saves");
+  if (!res.ok) return [];
+  const data = await res.json();
+  // The listing endpoint returns metadata only (no full JSON blobs)
+  // Convert to SavedGame-compatible shape for display
+  return (data.saves || []).map(
+    (s: Record<string, unknown>) =>
+      ({
+        id: s.id as string,
+        timestamp: s.timestamp as number,
+        gameState: { turn: s.turn as number } as PersistedGameState,
+        gameConfig: {
+          scenario: s.scenario,
+          playerNationId: s.playerNationId,
+          provider: s.provider,
+          model: s.model,
+          difficulty: s.difficulty,
+        } as unknown as GameConfig,
+        logs: [],
+        events: [],
+        storySoFar: s.storySoFar as string | undefined,
+        version: (s.version as string) || "2.0.0",
+      }) as SavedGame
+  );
+}
+
+async function cloudDeleteGame(id: string): Promise<void> {
+  await fetch(`/api/saves/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+// ---------------------------------------------------------------------------
+// Unified async exports (dual-backend dispatch)
+// ---------------------------------------------------------------------------
+
+export async function saveGame(
+  gameState: GameState,
+  gameConfig: GameConfig,
+  logs: LogEntry[],
+  saveName?: string,
+  events: GameEvent[] = [],
+  storySoFar?: string
+): Promise<string> {
+  // Always write to localStorage
+  const id = localSaveGame(gameState, gameConfig, logs, saveName, events, storySoFar);
+
+  // Also write to cloud if authenticated
+  if (_authenticated) {
+    try {
+      await cloudSaveGame(gameState, gameConfig, logs, saveName || id, events, storySoFar);
+    } catch (err) {
+      console.error("Cloud save failed, localStorage fallback used:", err);
+    }
+  }
+
+  return id;
+}
+
+export async function loadGame(id: string): Promise<SavedGame | null> {
+  if (_authenticated) {
+    try {
+      const cloudSave = await cloudLoadGame(id);
+      if (cloudSave) return cloudSave;
+    } catch (err) {
+      console.error("Cloud load failed, falling back to localStorage:", err);
+    }
+  }
+  return localLoadGame(id);
+}
+
+export async function listSavedGames(): Promise<SavedGame[]> {
+  const localSaves = localListSavedGames();
+
+  if (_authenticated) {
+    try {
+      const cloudSaves = await cloudListSavedGames();
+      // Merge: cloud saves take precedence, then add local-only saves
+      const cloudIds = new Set(cloudSaves.map((s) => s.id));
+      const localOnly = localSaves.filter((s) => !cloudIds.has(s.id));
+      const merged = [...cloudSaves, ...localOnly];
+      merged.sort((a, b) => b.timestamp - a.timestamp);
+      return merged;
+    } catch (err) {
+      console.error("Cloud list failed, using localStorage only:", err);
+    }
+  }
+
+  return localSaves;
+}
+
+export async function deleteGame(id: string): Promise<void> {
+  localDeleteGame(id);
+
+  if (_authenticated) {
+    try {
+      await cloudDeleteGame(id);
+    } catch (err) {
+      console.error("Cloud delete failed:", err);
+    }
+  }
+}
+
 export function getLatestSave(): SavedGame | null {
-  const saves = listSavedGames();
+  const saves = localListSavedGames();
   return saves.length > 0 ? saves[0] : null;
 }
+
+// ---------------------------------------------------------------------------
+// Upload localStorage saves to cloud (migration)
+// ---------------------------------------------------------------------------
+
+export async function uploadLocalSavesToCloud(): Promise<number> {
+  const localSaves = localListSavedGames();
+  if (localSaves.length === 0) return 0;
+
+  const res = await fetch("/api/saves/upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ saves: localSaves }),
+  });
+
+  if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+  const data = await res.json();
+  return data.uploaded || 0;
+}
+
+// ---------------------------------------------------------------------------
+// Auto-save (debounced, async)
+// ---------------------------------------------------------------------------
 
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -203,10 +419,8 @@ export function autoSave(
   }
 
   autoSaveTimer = setTimeout(() => {
-    try {
-      saveGame(gameState, gameConfig, logs, saveName, events, storySoFar);
-    } catch (error) {
-      console.error("Auto-save failed:", error);
-    }
+    saveGame(gameState, gameConfig, logs, saveName, events, storySoFar).catch((err) => {
+      console.error("Auto-save failed:", err);
+    });
   }, delay);
 }
