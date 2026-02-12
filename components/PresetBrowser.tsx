@@ -15,6 +15,7 @@ interface PresetBrowserProps {
   onSelectPreset: (preset: Preset) => void;
   onCustomScenario: () => void;
   savedGames?: SavedGame[];
+  savesLoading?: boolean;
   onLoadSavedGame?: (saveId: string) => void;
   onDeleteSavedGame?: (saveId: string) => void;
   getNationName?: (id: string) => string;
@@ -265,6 +266,7 @@ export default function PresetBrowser({
   onSelectPreset,
   onCustomScenario,
   savedGames,
+  savesLoading,
   onLoadSavedGame,
   onDeleteSavedGame,
   getNationName,
@@ -434,7 +436,12 @@ export default function PresetBrowser({
           className={`shrink-0 px-6 pt-3 pb-8 flex flex-col items-center gap-3 transition-all duration-600 ease-out ${footerVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}
         >
           {/* Saved games */}
-          {savedGames && savedGames.length > 0 && onLoadSavedGame && onDeleteSavedGame && (
+          {savesLoading && (
+            <div className="w-full mb-4 text-center text-sm text-slate-500 animate-pulse">
+              Loading saves...
+            </div>
+          )}
+          {!savesLoading && savedGames && savedGames.length > 0 && onLoadSavedGame && onDeleteSavedGame && (
             <div className="w-full mb-4">
               <SavedGamesList
                 savedGames={savedGames}

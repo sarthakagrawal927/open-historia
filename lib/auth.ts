@@ -16,4 +16,8 @@ export const auth = betterAuth({
   session: {
     expiresIn: 60 * 60 * 24 * 30, // 30 days
   },
+  rateLimit: {
+    window: 60,       // 60 second window
+    max: 10,           // max 10 auth requests per window per IP
+  },
 });

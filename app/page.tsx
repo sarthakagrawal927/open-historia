@@ -83,6 +83,7 @@ export default function GamePage({ initialGameId }: { initialGameId?: string } =
   const [lastSaveTime, setLastSaveTime] = useState<number | null>(null);
   const [showSaveNotif, setShowSaveNotif] = useState(false);
   const [savedGames, setSavedGames] = useState<SavedGame[]>([]);
+  const [savesLoading, setSavesLoading] = useState(false);
   const [showSavesPanel, setShowSavesPanel] = useState(false);
   const [showPromptSettings, setShowPromptSettings] = useState(false);
 
@@ -97,17 +98,24 @@ export default function GamePage({ initialGameId }: { initialGameId?: string } =
   // ── Auth ────────────────────────────────────────────────────────────────
   const { data: authSession } = authClient.useSession();
 
-  useEffect(() => {
-    setAuthenticated(!!authSession?.user);
-  }, [authSession]);
-
   // ── Initialization ──────────────────────────────────────────────────────
 
   const refreshSavedGames = useCallback(async () => {
     if (typeof window === "undefined") return;
-    const saves = await listSavedGames();
-    setSavedGames(saves);
+    setSavesLoading(true);
+    try {
+      const saves = await listSavedGames();
+      setSavedGames(saves);
+    } finally {
+      setSavesLoading(false);
+    }
   }, []);
+
+  // Sync auth state + re-fetch saves when session changes
+  useEffect(() => {
+    setAuthenticated(!!authSession?.user);
+    refreshSavedGames();
+  }, [authSession, refreshSavedGames]);
 
   useEffect(() => {
     async function load() {
@@ -802,6 +810,7 @@ export default function GamePage({ initialGameId }: { initialGameId?: string } =
         onSelectPreset={handleSelectPreset}
         onCustomScenario={handleCustomScenario}
         savedGames={savedGames}
+        savesLoading={savesLoading}
         onLoadSavedGame={handleLoadSavedGame}
         onDeleteSavedGame={handleDeleteSavedGame}
         getNationName={getNationLabel}

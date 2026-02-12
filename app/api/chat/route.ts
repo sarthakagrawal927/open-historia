@@ -4,6 +4,7 @@ import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { buildDiplomacyPrompt } from "@/lib/ai-prompts";
 import { callCliBridge } from "@/lib/cli-bridge";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
 // ---------------------------------------------------------------------------
 // Constants & Helpers
@@ -182,6 +183,15 @@ async function callProvider(
 // ---------------------------------------------------------------------------
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req.headers);
+  const { allowed, retryAfterMs } = rateLimit(`chat:${ip}`, { maxRequests: 30, windowMs: 60_000 });
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please slow down." },
+      { status: 429, headers: { "Retry-After": String(Math.ceil(retryAfterMs / 1000)) } }
+    );
+  }
+
   try {
     const body = await req.json();
 
