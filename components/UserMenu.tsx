@@ -16,7 +16,6 @@ export default function UserMenu({ user, onRefreshSaves }: UserMenuProps) {
   const [uploadResult, setUploadResult] = useState<string | null>(null);
   const [showUploadPrompt, setShowUploadPrompt] = useState(false);
 
-  // On first sign-in, check if there are local saves to offer uploading
   useEffect(() => {
     const alreadyPrompted = localStorage.getItem(UPLOAD_PROMPTED_KEY);
     if (alreadyPrompted) return;
@@ -61,21 +60,23 @@ export default function UserMenu({ user, onRefreshSaves }: UserMenuProps) {
     window.location.reload();
   };
 
+  const initial = (user.name || user.email || "?").charAt(0).toUpperCase();
+
   return (
     <div className="flex flex-col items-end gap-2">
       {/* Upload prompt banner */}
       {showUploadPrompt && (
-        <div className="bg-sky-900/80 border border-sky-700 rounded-lg px-3 py-2 text-xs text-sky-200 flex items-center gap-2 backdrop-blur">
-          <span>Upload your local saves to the cloud?</span>
+        <div className="bg-sky-900/50 border border-sky-700/40 rounded-xl px-3 py-2.5 text-xs text-sky-200 flex items-center gap-2 backdrop-blur-sm animate-slide-down">
+          <span>Upload local saves to the cloud?</span>
           <button
             onClick={handleUpload}
-            className="bg-sky-600 hover:bg-sky-500 text-white font-bold px-2 py-0.5 rounded text-[11px] uppercase"
+            className="bg-sky-600/80 hover:bg-sky-500 text-white font-bold px-2.5 py-1 rounded-lg text-[11px] uppercase transition-colors"
           >
             Upload
           </button>
           <button
             onClick={dismissPrompt}
-            className="text-sky-400 hover:text-sky-300 text-[11px]"
+            className="text-sky-400/70 hover:text-sky-300 text-[11px] transition-colors"
           >
             Dismiss
           </button>
@@ -83,25 +84,28 @@ export default function UserMenu({ user, onRefreshSaves }: UserMenuProps) {
       )}
 
       <div className="flex items-center gap-2">
-        <span className="text-xs text-slate-400 hidden sm:inline">
+        <div className="w-7 h-7 rounded-full bg-amber-900/40 border border-amber-700/30 flex items-center justify-center text-[11px] font-bold text-amber-400 shrink-0">
+          {initial}
+        </div>
+        <span className="text-xs text-slate-500 hidden sm:inline max-w-[120px] truncate">
           {user.name || user.email}
         </span>
         <button
           onClick={handleUpload}
           disabled={uploading}
-          className="text-[11px] uppercase bg-sky-800 hover:bg-sky-700 disabled:opacity-50 text-white font-bold px-2 py-1 rounded transition-colors"
+          className="text-[11px] uppercase bg-sky-800/50 hover:bg-sky-700/60 disabled:opacity-50 text-white font-bold px-2.5 py-1.5 rounded-lg transition-colors border border-sky-700/30"
           title="Upload local saves to cloud"
         >
           {uploading ? "Uploading..." : "Upload Saves"}
         </button>
         <button
           onClick={handleSignOut}
-          className="text-[11px] uppercase bg-slate-700 hover:bg-slate-600 text-white font-bold px-2 py-1 rounded transition-colors"
+          className="text-[11px] uppercase bg-slate-800/50 hover:bg-slate-700/60 text-slate-300 font-bold px-2.5 py-1.5 rounded-lg transition-colors border border-slate-700/30"
         >
           Sign Out
         </button>
         {uploadResult && (
-          <span className="text-[11px] text-emerald-400">{uploadResult}</span>
+          <span className="text-[11px] text-emerald-400 animate-fade-in">{uploadResult}</span>
         )}
       </div>
     </div>

@@ -840,10 +840,7 @@ export default function GamePage({ initialGameId }: { initialGameId?: string } =
       <GameSetup
         provinces={provincesCache}
         onStartGame={handleStartGame}
-        savedGames={savedGames}
-        onLoadSavedGame={handleLoadSavedGame}
-        onDeleteSavedGame={handleDeleteSavedGame}
-        onRefreshSavedGames={refreshSavedGames}
+        onBack={() => { setShowPresets(true); setSelectedPreset(null); }}
         preset={
           selectedPreset
             ? {
@@ -851,6 +848,7 @@ export default function GamePage({ initialGameId }: { initialGameId?: string } =
                 scenario: selectedPreset.scenario,
                 difficulty: selectedPreset.difficulty,
                 suggestedNations: selectedPreset.suggestedNations,
+                scenarioName: selectedPreset.name,
               }
             : null
         }
