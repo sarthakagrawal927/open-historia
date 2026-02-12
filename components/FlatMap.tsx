@@ -212,6 +212,7 @@ export default function FlatMap({
   const hoverRef = useRef<HoverState>({ provinceId: null, brightness: 0, targetBrightness: 0 });
   const stateLinesPathRef = useRef<Path2D | null>(null);
   const acquisitionsRef = useRef<AcquisitionAnim[]>([]);
+  const didInitialZoomRef = useRef(false);
   const prevOwnersRef = useRef<Map<string | number, string | null>>(new Map());
   const rafIdRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
@@ -394,6 +395,45 @@ export default function FlatMap({
     cam.targetX = w / 2 - projected[0] * cam.targetZoom;
     cam.targetY = h / 2 - projected[1] * cam.targetZoom;
   }, [selectedProvinceId, provinces]);
+
+  // ---------------------------------------------------------------------------
+  // Initial Zoom to Player's Nation on Game Start
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (didInitialZoomRef.current) return;
+    if (!projectionRef.current || provinces.length === 0) return;
+
+    // Find all player-owned provinces to compute centroid
+    const playerProvinces = provinces.filter((p) => p.ownerId === "player");
+    if (playerProvinces.length === 0) return;
+
+    didInitialZoomRef.current = true;
+
+    // Average center of all player provinces
+    let sumLon = 0;
+    let sumLat = 0;
+    for (const p of playerProvinces) {
+      sumLon += p.center[0];
+      sumLat += p.center[1];
+    }
+    const centroid: [number, number] = [sumLon / playerProvinces.length, sumLat / playerProvinces.length];
+
+    const projected = projectionRef.current(centroid);
+    if (!projected) return;
+
+    const cam = cameraRef.current;
+    const w = sizeRef.current.width;
+    const h = sizeRef.current.height;
+
+    const initialZoom = 3;
+    cam.targetZoom = initialZoom;
+    cam.zoom = initialZoom;
+    cam.targetX = w / 2 - projected[0] * initialZoom;
+    cam.targetY = h / 2 - projected[1] * initialZoom;
+    cam.x = cam.targetX;
+    cam.y = cam.targetY;
+  }, [provinces]);
 
   // ---------------------------------------------------------------------------
   // Province hit-testing
@@ -700,11 +740,11 @@ export default function FlatMap({
         }
       }
 
-      // ---- 3b. Sub-national State Boundaries (visible when zoomed in) ----
-      if (stateLinesPathRef.current && cam.zoom >= 1.2) {
-        const stateAlpha = Math.min(0.45, (cam.zoom - 1.2) * 0.25);
+      // ---- 3b. Sub-national State Boundaries ----
+      if (stateLinesPathRef.current) {
+        const stateAlpha = Math.min(0.35, 0.12 + cam.zoom * 0.04);
         ctx.strokeStyle = `rgba(255,255,255,${stateAlpha.toFixed(3)})`;
-        ctx.lineWidth = 0.3 / cam.zoom;
+        ctx.lineWidth = 0.4 / cam.zoom;
         ctx.stroke(stateLinesPathRef.current);
       }
 
