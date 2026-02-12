@@ -350,7 +350,7 @@ export default function GameSetup({ provinces, onStartGame, onBack, preset }: Ga
               {/* Difficulty */}
               <div className="mt-4">
                 <label className="text-xs text-gray-400 ml-1 mb-1 block">Difficulty</label>
-                <div className="flex bg-[#1E2538] rounded-xl p-1 shadow-inner h-[44px]">
+                <div className="grid grid-cols-5 bg-[#1E2538] rounded-xl p-1 shadow-inner gap-1">
                   {DIFFICULTY_OPTIONS.map(opt => {
                     const isActive = difficulty === opt.value;
                     return (
@@ -358,15 +358,15 @@ export default function GameSetup({ provinces, onStartGame, onBack, preset }: Ga
                         key={opt.value}
                         type="button"
                         onClick={() => setDifficulty(opt.value)}
-                        className={`flex-1 rounded-lg text-[11px] font-medium flex items-center justify-center gap-1 transition-all duration-200 whitespace-nowrap ${
+                        className={`rounded-lg py-2 text-[11px] font-medium flex flex-col items-center justify-center transition-all duration-200 ${
                           isActive
                             ? "bg-gray-700 shadow-sm text-white"
                             : "text-gray-500 hover:text-gray-300"
                         }`}
                         title={opt.label}
                       >
-                        <span className="text-sm">{opt.icon}</span>
-                        <span>{opt.label}</span>
+                        <span className="text-base leading-none">{opt.icon}</span>
+                        <span className="mt-0.5">{opt.label}</span>
                       </button>
                     );
                   })}
