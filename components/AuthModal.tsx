@@ -22,7 +22,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
     try {
       await authClient.signIn.social({
         provider: "google",
-        callbackURL: window.location.href,
+        callbackURL: window.location.pathname,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
