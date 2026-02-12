@@ -53,7 +53,7 @@ export default function CommandTerminal({ logs, onCommand, processing }: Command
 
   // Derived state for suggestions
   const filteredSuggestions = useMemo(() => {
-    if (input.trim().length === 0) return [];
+    if (input.trim().length === 0) return COMMAND_SUGGESTIONS;
     return COMMAND_SUGGESTIONS.filter((cmd) =>
       cmd.toLowerCase().includes(input.toLowerCase())
     );
@@ -75,41 +75,64 @@ export default function CommandTerminal({ logs, onCommand, processing }: Command
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    // Navigate command history
-    if (e.key === "ArrowUp") {
+    // Tab always opens/cycles suggestions — prevent browser focus switch
+    if (e.key === "Tab") {
       e.preventDefault();
-      if (commandHistory.length === 0) return;
-      const newIndex = Math.min(historyIndex + 1, commandHistory.length - 1);
-      setHistoryIndex(newIndex);
-      setInput(commandHistory[newIndex]);
-      setShowSuggestions(false);
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      if (historyIndex <= 0) {
-        setHistoryIndex(-1);
-        setInput("");
-      } else {
-        const newIndex = historyIndex - 1;
-        setHistoryIndex(newIndex);
-        setInput(commandHistory[newIndex]);
-      }
-      setShowSuggestions(false);
-    }
-    // Navigate suggestions
-    else if (showSuggestions && filteredSuggestions.length > 0) {
-      if (e.key === "Tab" || (e.key === "ArrowDown" && !e.shiftKey)) {
-        e.preventDefault();
-        setSelectedSuggestionIndex((prev) => (prev + 1) % filteredSuggestions.length);
-      } else if (e.key === "ArrowUp" && !e.shiftKey) {
-        e.preventDefault();
+      if (!showSuggestions || filteredSuggestions.length === 0) {
+        // Open suggestions and select the first one
+        setShowSuggestions(true);
+        setSelectedSuggestionIndex(0);
+      } else if (e.shiftKey) {
         setSelectedSuggestionIndex((prev) =>
           prev === 0 ? filteredSuggestions.length - 1 : prev - 1
         );
-      } else if (e.key === "Enter" && filteredSuggestions.length > 0) {
-        e.preventDefault();
-        setInput(filteredSuggestions[selectedSuggestionIndex]);
+      } else {
+        setSelectedSuggestionIndex((prev) => (prev + 1) % filteredSuggestions.length);
+      }
+      return;
+    }
+
+    // Enter accepts a highlighted suggestion, or submits the form
+    if (e.key === "Enter" && showSuggestions && filteredSuggestions.length > 0) {
+      e.preventDefault();
+      setInput(filteredSuggestions[selectedSuggestionIndex]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    // Escape closes suggestions
+    if (e.key === "Escape") {
+      setShowSuggestions(false);
+      return;
+    }
+
+    // Navigate command history
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (showSuggestions && filteredSuggestions.length > 0) {
+        setSelectedSuggestionIndex((prev) =>
+          prev === 0 ? filteredSuggestions.length - 1 : prev - 1
+        );
+      } else {
+        if (commandHistory.length === 0) return;
+        const newIndex = Math.min(historyIndex + 1, commandHistory.length - 1);
+        setHistoryIndex(newIndex);
+        setInput(commandHistory[newIndex]);
         setShowSuggestions(false);
-      } else if (e.key === "Escape") {
+      }
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (showSuggestions && filteredSuggestions.length > 0) {
+        setSelectedSuggestionIndex((prev) => (prev + 1) % filteredSuggestions.length);
+      } else {
+        if (historyIndex <= 0) {
+          setHistoryIndex(-1);
+          setInput("");
+        } else {
+          const newIndex = historyIndex - 1;
+          setHistoryIndex(newIndex);
+          setInput(commandHistory[newIndex]);
+        }
         setShowSuggestions(false);
       }
     }
@@ -236,7 +259,7 @@ export default function CommandTerminal({ logs, onCommand, processing }: Command
               }}
 	            onKeyDown={handleKeyDown}
             className="flex-1 bg-transparent border-none outline-none text-slate-200 placeholder-slate-600 focus:ring-0"
-            placeholder="Enter orders (↑↓ for history, Tab for suggestions)"
+            placeholder="Enter orders (↑↓ history, Tab suggestions, Enter send)"
             autoFocus
             />
         </div>
