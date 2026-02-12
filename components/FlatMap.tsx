@@ -209,6 +209,9 @@ export default function FlatMap({
   // Projected bounds of the map in projection-space coordinates (set by buildProjectionAndCache)
   const mapBoundsRef = useRef({ left: 0, top: 0, right: 1920, bottom: 1080 });
   const hoverRef = useRef<HoverState>({ provinceId: null, brightness: 0, targetBrightness: 0 });
+  // Offscreen hit-testing canvas: each province rendered with a unique color for O(1) lookup
+  const hitCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const hitIndexToIdRef = useRef<Array<string | number>>([]);
   const acquisitionsRef = useRef<AcquisitionAnim[]>([]);
   const didInitialZoomRef = useRef(false);
   const prevOwnersRef = useRef<Map<string | number, string | null>>(new Map());
@@ -291,6 +294,34 @@ export default function FlatMap({
       }
     }
     pathCacheRef.current = cache;
+
+    // Build offscreen hit-canvas: each province filled with unique color for O(1) hit-testing
+    let hitCanvas = hitCanvasRef.current;
+    if (!hitCanvas) {
+      hitCanvas = document.createElement("canvas");
+      hitCanvasRef.current = hitCanvas;
+    }
+    hitCanvas.width = w;
+    hitCanvas.height = h;
+    const hitCtx = hitCanvas.getContext("2d", { willReadFrequently: true });
+    if (hitCtx) {
+      hitCtx.clearRect(0, 0, w, h);
+      const indexToId: Array<string | number> = [];
+      // Render larger (country-level) provinces first, sub-national on top so they win overlaps
+      const sortedProvs = [...provs].sort((a, b) => (a.isSubNational ? 1 : 0) - (b.isSubNational ? 1 : 0));
+      for (const p of sortedProvs) {
+        const path2d = cache.get(p.id);
+        if (!path2d) continue;
+        const idx = indexToId.length + 1; // 0 = no province (black)
+        indexToId.push(p.id);
+        const r = idx & 0xFF;
+        const g = (idx >> 8) & 0xFF;
+        const b2 = (idx >> 16) & 0xFF;
+        hitCtx.fillStyle = `rgb(${r},${g},${b2})`;
+        hitCtx.fill(path2d, "evenodd");
+      }
+      hitIndexToIdRef.current = indexToId;
+    }
 
   }, []);
 
@@ -414,28 +445,29 @@ export default function FlatMap({
   // ---------------------------------------------------------------------------
 
   const findProvinceAtScreen = useCallback((screenX: number, screenY: number): Province | null => {
-    const canvas = canvasRef.current;
-    if (!canvas) return null;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return null;
+    const hitCanvas = hitCanvasRef.current;
+    if (!hitCanvas) return null;
+    const hitCtx = hitCanvas.getContext("2d", { willReadFrequently: true });
+    if (!hitCtx) return null;
 
     const cam = cameraRef.current;
-    const pathCache = pathCacheRef.current;
 
-    // Convert screen coords to map coords (undo camera transform)
-    const mapX = (screenX - cam.x) / cam.zoom;
-    const mapY = (screenY - cam.y) / cam.zoom;
+    // Convert screen coords to projection-space coords (undo camera transform)
+    const mapX = Math.round((screenX - cam.x) / cam.zoom);
+    const mapY = Math.round((screenY - cam.y) / cam.zoom);
 
-    // Use Path2D isPointInPath for pixel-perfect hit-testing against rendered geometry
-    const provs = provincesRef.current;
-    // Test smaller (sub-national) provinces first so they take priority over any overlaps
-    for (let i = 0; i < provs.length; i++) {
-      const path2d = pathCache.get(provs[i].id);
-      if (path2d && ctx.isPointInPath(path2d, mapX, mapY)) {
-        return provs[i];
-      }
-    }
-    return null;
+    // Bounds check
+    if (mapX < 0 || mapX >= hitCanvas.width || mapY < 0 || mapY >= hitCanvas.height) return null;
+
+    // Read pixel from hit canvas — color encodes province index
+    const pixel = hitCtx.getImageData(mapX, mapY, 1, 1).data;
+    const code = pixel[0] + (pixel[1] << 8) + (pixel[2] << 16);
+    if (code === 0) return null; // ocean / no province
+
+    const provinceId = hitIndexToIdRef.current[code - 1];
+    if (provinceId === undefined) return null;
+
+    return provincesRef.current.find((p) => p.id === provinceId) || null;
   }, []);
 
   // ---------------------------------------------------------------------------
@@ -675,22 +707,22 @@ export default function FlatMap({
           ];
         }
 
-        // Fill province
+        // Fill province (evenodd rule handles any geometry winding issues)
         ctx.fillStyle = rgbToCSS(fillRgb[0], fillRgb[1], fillRgb[2]);
-        ctx.fill(path2d);
+        ctx.fill(path2d, "evenodd");
 
         // White flash overlay for acquisition
         if (flashAlpha > 0.01) {
           ctx.globalAlpha = flashAlpha;
           ctx.fillStyle = "#ffffff";
-          ctx.fill(path2d);
+          ctx.fill(path2d, "evenodd");
           ctx.globalAlpha = 1;
         }
 
         // Inner glow for player territories (subtle)
         if (p.ownerId && plrs[p.ownerId]) {
           ctx.save();
-          ctx.clip(path2d);
+          ctx.clip(path2d, "evenodd");
           const ownerRgb = parseColor(plrs[p.ownerId].color);
           ctx.strokeStyle = rgbToCSS(
             Math.min(255, ownerRgb[0] + 60),
