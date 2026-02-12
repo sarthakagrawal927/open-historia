@@ -140,14 +140,38 @@ export default function GameSetup({ provinces, onStartGame, onBack, preset }: Ga
   const handleApiKeyChange = (v: string) => { setApiKey(v); if (rememberKey) persistProviderKey(provider, v, true); };
   const handleRememberKeyChange = (v: boolean) => { setRememberKey(v); persistProviderKey(provider, apiKey, v); };
 
-  const majorNations = useMemo(() =>
-    provinces.filter(p => p.name !== "Antarctica" && !p.name.startsWith("Region")).sort((a, b) => a.name.localeCompare(b.name)),
-    [provinces]
-  );
+  // Show only top-level countries in the picker (one entry per country, not sub-provinces)
+  const majorNations = useMemo(() => {
+    const seen = new Set<string>();
+    return provinces
+      .filter(p => p.name !== "Antarctica" && !p.name.startsWith("Region"))
+      .filter(p => {
+        // For sub-national provinces, deduplicate by parent country
+        const key = p.parentCountryId || String(p.id);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map(p => ({
+        ...p,
+        // Show parent country name for subdivided nations
+        name: p.parentCountryName || p.name,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [provinces]);
+
   const suggestedNationPicks = useMemo(() =>
     (preset?.suggestedNations || [])
-      .map(name => { const m = provinces.find(p => p.name.toLowerCase() === name.toLowerCase()); return m ? { id: m.id, name: m.name } : null; })
+      .map(name => {
+        // Try matching by parent country name first, then by province name
+        const m = provinces.find(p =>
+          (p.parentCountryName || p.name).toLowerCase() === name.toLowerCase()
+        );
+        return m ? { id: m.id, name: m.parentCountryName || m.name } : null;
+      })
       .filter((n): n is { id: string | number; name: string } => n !== null)
+      // Deduplicate
+      .filter((n, i, arr) => arr.findIndex(x => x.name === n.name) === i)
       .slice(0, 8),
     [preset?.suggestedNations, provinces]
   );

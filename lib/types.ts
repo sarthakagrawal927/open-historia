@@ -21,6 +21,9 @@ export type Province = {
     economy: number;
     technology: number;
   };
+  parentCountryId?: string;
+  parentCountryName?: string;
+  isSubNational?: boolean;
 };
 
 export type MapTheme = "classic" | "cyberpunk" | "parchment" | "blueprint";

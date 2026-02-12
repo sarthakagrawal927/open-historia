@@ -31,7 +31,7 @@ function formatHistory(history?: Array<{ type?: string; text?: string; content?:
   return history.slice(-8).map((h) => `[${(h.type || "info").toUpperCase()}] ${h.text || h.content || ""}`).join("\n");
 }
 
-function formatProvinces(provinces?: Array<{ name: string; ownerId: string | null }>): string {
+function formatProvinces(provinces?: Array<{ name: string; ownerId: string | null; parentCountryName?: string; isSubNational?: boolean }>): string {
   if (!provinces || provinces.length === 0) return "None.";
   const grouped: Record<string, string[]> = {};
   for (const p of provinces.filter((p) => p.ownerId !== null)) {
@@ -39,7 +39,37 @@ function formatProvinces(provinces?: Array<{ name: string; ownerId: string | nul
     if (!grouped[o]) grouped[o] = [];
     grouped[o].push(p.name);
   }
-  return Object.entries(grouped).map(([o, n]) => `${o}: ${n.join(", ")}`).join("; ");
+  // Compress: if all sub-provinces of a country are owned by the same player, collapse
+  return Object.entries(grouped).map(([owner, names]) => {
+    const compressed = compressProvinceNames(names);
+    return `${owner}: ${compressed}`;
+  }).join("; ");
+}
+
+/** Collapse sub-province lists like "Northeast (USA), Southeast (USA), ..." into "all of USA (9 regions)" */
+function compressProvinceNames(names: string[]): string {
+  // Group names that have parenthetical country suffixes
+  const byCountry: Record<string, string[]> = {};
+  const standalone: string[] = [];
+  for (const name of names) {
+    const m = name.match(/^(.+)\s+\((.+)\)$/);
+    if (m) {
+      const country = m[2];
+      if (!byCountry[country]) byCountry[country] = [];
+      byCountry[country].push(name);
+    } else {
+      standalone.push(name);
+    }
+  }
+  const parts: string[] = [...standalone];
+  for (const [country, regionNames] of Object.entries(byCountry)) {
+    if (regionNames.length >= 3) {
+      parts.push(`all of ${country} (${regionNames.length} regions)`);
+    } else {
+      parts.push(...regionNames);
+    }
+  }
+  return parts.join(", ");
 }
 
 function buildGeopoliticalContext(year: number): string {

@@ -672,53 +672,35 @@ function countryColor(isoCode: string): string {
 
 export async function loadWorldData(): Promise<Province[]> {
   try {
-    const response = await fetch("/world-50m.json");
+    const response = await fetch("/provinces-combined.json");
     if (!response.ok) throw new Error("Failed to load map data");
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const topology: any = await response.json();
 
-    const countriesObject = topology.objects.countries;
+    const provincesObject = topology.objects.provinces;
 
-    // Compute neighbor adjacency from the topology
-    const neighborIndices = topojson.neighbors(countriesObject.geometries);
+    // Compute neighbor adjacency from the combined topology
+    const neighborIndices = topojson.neighbors(provincesObject.geometries);
 
     // Convert topology to GeoJSON FeatureCollection
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const geojson = topojson.feature(topology, countriesObject) as any;
+    const geojson = topojson.feature(topology, provincesObject) as any;
 
-    // Build a mapping from geometry index to normalized ISO id
+    // Build mapping from geometry index to province id
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const geometryIdByIndex: string[] = countriesObject.geometries.map((g: any, _i: number) => {
-      return g.id ? String(g.id).padStart(3, "0") : "";
+    const idByIndex: string[] = provincesObject.geometries.map((g: any) => {
+      return g.properties?.provinceId || "";
     });
 
-    // Filter out Antarctica (010) and features without a valid id
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const validFeatures: { feature: any; geomIndex: number }[] = [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    geojson.features.forEach((feature: any, index: number) => {
-      const rawId = feature.id != null ? String(feature.id).padStart(3, "0") : "";
-      if (!rawId || rawId === "010") return; // skip Antarctica and null-id features
-      validFeatures.push({ feature, geomIndex: index });
-    });
-
-    // Deduplicate features by id (world-50m has duplicate "036" for Australia)
-    const seenIds = new Set<string>();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const dedupedFeatures: { feature: any; geomIndex: number }[] = [];
-    for (const entry of validFeatures) {
-      const id = String(entry.feature.id).padStart(3, "0");
-      if (seenIds.has(id)) continue;
-      seenIds.add(id);
-      dedupedFeatures.push(entry);
-    }
+    const allIds = new Set(idByIndex.filter(Boolean));
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const provinces: Province[] = dedupedFeatures.map(({ feature, geomIndex }: { feature: any; geomIndex: number }) => {
-      const id = String(feature.id).padStart(3, "0");
-      const name = COUNTRY_NAMES[id] || `Region ${id}`;
-      const color = countryColor(id);
+    const provinces: Province[] = geojson.features.map((feature: any, index: number) => {
+      const props = feature.properties || {};
+      const id = props.provinceId || String(index);
+      const name = props.displayName || `Region ${id}`;
+      const color = props.color || countryColor(props.parentCountryId || id);
 
       // Compute centroid using d3-geo
       let center: [number, number] = [0, 0];
@@ -731,20 +713,16 @@ export async function loadWorldData(): Promise<Province[]> {
         // Some degenerate geometries may fail; keep [0,0]
       }
 
-      // Resolve neighbor ids from the precomputed neighbor indices
+      // Resolve neighbor ids from precomputed topology
       const neighborIds: string[] = [];
-      const rawNeighborIndices = neighborIndices[geomIndex] || [];
+      const rawNeighborIndices = neighborIndices[index] || [];
       for (const ni of rawNeighborIndices) {
-        const nId = geometryIdByIndex[ni];
-        if (nId && nId !== "010" && seenIds.has(nId)) {
+        const nId = idByIndex[ni];
+        if (nId && allIds.has(nId)) {
           neighborIds.push(nId);
         }
       }
-      // Deduplicate neighbor ids
       const uniqueNeighborIds = [...new Set(neighborIds)];
-
-      // Look up real stats or fall back to defaults
-      const stats = COUNTRY_DATA[id] || DEFAULT_STATS;
 
       return {
         id,
@@ -755,11 +733,14 @@ export async function loadWorldData(): Promise<Province[]> {
         center,
         neighbors: uniqueNeighborIds,
         resources: {
-          population: stats.population,
-          defense: stats.defense,
-          economy: stats.economy,
-          technology: stats.technology,
+          population: props.population ?? 2,
+          defense: props.defense ?? 2,
+          economy: props.economy ?? 10,
+          technology: props.technology ?? 3,
         },
+        parentCountryId: props.parentCountryId,
+        parentCountryName: props.parentCountryName,
+        isSubNational: props.isSubNational ?? false,
       };
     });
 

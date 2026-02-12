@@ -210,10 +210,13 @@ export default function GamePage({ initialGameId }: { initialGameId?: string } =
 
     let provinces = provincesCache;
     if (nation) {
-      initialPlayers["player"].name = nation.name;
-      provinces = provincesCache.map((p) =>
-        p.id === config.playerNationId ? { ...p, ownerId: "player" } : p
-      );
+      initialPlayers["player"].name = nation.parentCountryName || nation.name;
+      // Assign ALL sub-provinces of the selected country (or the single province if not subdivided)
+      const parentId = nation.parentCountryId || String(nation.id);
+      provinces = provincesCache.map((p) => {
+        const pParent = p.parentCountryId || String(p.id);
+        return pParent === parentId ? { ...p, ownerId: "player" } : p;
+      });
       setProvincesCache(provinces);
     }
 
@@ -353,9 +356,24 @@ export default function GamePage({ initialGameId }: { initialGameId?: string } =
 
             setGameState((prev) => {
               if (!prev) return null;
-              const target = prev.provinces.find(
-                (p) => p.name.toLowerCase() === provinceName.toLowerCase()
+              const pLower = provinceName.toLowerCase();
+              // Try exact match first, then match without parenthetical suffix
+              let target = prev.provinces.find(
+                (p) => p.name.toLowerCase() === pLower
               );
+              if (!target) {
+                // Try matching just the region name part (e.g., "West Coast" matches "West Coast (USA)")
+                target = prev.provinces.find(
+                  (p) => p.name.toLowerCase().startsWith(pLower + " (") ||
+                         p.name.replace(/\s*\(.*\)$/, "").toLowerCase() === pLower
+                );
+              }
+              if (!target) {
+                // Try matching parent country name (e.g., "France" matches "France")
+                target = prev.provinces.find(
+                  (p) => (p.parentCountryName || "").toLowerCase() === pLower && !p.isSubNational
+                );
+              }
               if (target) {
                 return {
                   ...prev,
