@@ -1,5 +1,8 @@
 # Open Historia
 
+![AI Generated](https://ai-percentage-pin.vercel.app/api/ai-percentage?value=95)
+![AI PRs Welcome](https://ai-percentage-pin.vercel.app/api/ai-prs?welcome=yes)
+
 **Rewrite history through AI-powered grand strategy.**
 
 Open Historia is a unique strategy game where you command nations using natural language. Issue orders like "Invade West Coast" or "Negotiate trade with Japan", and watch as AI adjudicates outcomes, drives independent nation behavior, and creates emergent narratives spanning from ancient empires to speculative futures.
