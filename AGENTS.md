@@ -280,10 +280,6 @@ UserMenu.tsx (113 lines)
 AuthModal.tsx (80 lines)
 └─ Sign-in modal for unauthenticated users
 
-FlatMap.tsx (deprecated - replaced by MapView.tsx)
-MapCanvas.tsx (deprecated)
-GlobeMap.tsx (deprecated - old 3D globe)
-GlobeTooltip.tsx (deprecated)
 Sidebar.tsx (96 lines - minimal sidebar)
 Tooltip.tsx (67 lines - reusable tooltip)
 ```

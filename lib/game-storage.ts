@@ -34,7 +34,7 @@ export interface SavedGame {
 }
 
 const STORAGE_KEY = "open_historia_saves";
-const VERSION = "2.0.0";
+const VERSION = "3.0.0";
 
 const toProvinceKey = (id: string | number) => String(id);
 
@@ -48,6 +48,21 @@ const createSaveId = () => {
 const isLegacyGameState = (state: PersistedGameState): state is GameState => {
   return Array.isArray((state as GameState).provinces);
 };
+
+const SAVE_MIGRATIONS: Record<string, (save: SavedGame) => SavedGame> = {
+  "2.0.0": (save) => ({ ...save, version: "3.0.0" }),
+};
+
+function migrateSave(save: SavedGame): SavedGame {
+  let current = save;
+  const versions = Object.keys(SAVE_MIGRATIONS);
+  let idx = versions.indexOf(current.version);
+  while (idx !== -1 && current.version !== VERSION) {
+    current = SAVE_MIGRATIONS[current.version](current);
+    idx = versions.indexOf(current.version);
+  }
+  return current;
+}
 
 const toSnapshot = (gameState: GameState): GameStateSnapshot => ({
   turn: gameState.turn,
@@ -79,6 +94,7 @@ export function isAuthenticated(): boolean {
 // ---------------------------------------------------------------------------
 
 export function restoreSavedGameState(savedGame: SavedGame, baseProvinces: Province[]): GameState {
+  savedGame = migrateSave(savedGame);
   const persistedState = savedGame.gameState;
   if (isLegacyGameState(persistedState)) {
     return persistedState;
@@ -104,6 +120,18 @@ export function restoreSavedGameState(savedGame: SavedGame, baseProvinces: Provi
     selectedProvinceId: persistedState.selectedProvinceId,
     theme: persistedState.theme,
   };
+}
+
+// ---------------------------------------------------------------------------
+// localStorage quota monitoring
+// ---------------------------------------------------------------------------
+
+export function getStorageUsage(): { usedBytes: number; estimatedMaxBytes: number; percentUsed: number } {
+  const raw = localStorage.getItem(STORAGE_KEY) || "";
+  const usedBytes = JSON.stringify(raw).length * 2; // UTF-16
+  const estimatedMaxBytes = 5 * 1024 * 1024; // 5MB
+  const percentUsed = (usedBytes / estimatedMaxBytes) * 100;
+  return { usedBytes, estimatedMaxBytes, percentUsed };
 }
 
 // ---------------------------------------------------------------------------
@@ -136,6 +164,12 @@ export function localSaveGame(
 
     filtered.push(newSave);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+
+    const usage = getStorageUsage();
+    if (usage.percentUsed > 80) {
+      console.warn(`localStorage usage at ${usage.percentUsed.toFixed(1)}%. Consider deleting old saves.`);
+    }
+
     return id;
   } catch (error) {
     if (error instanceof Error && error.name === "QuotaExceededError") {
@@ -165,7 +199,7 @@ export function localListSavedGames(): SavedGame[] {
       .filter((save): save is Partial<SavedGame> => {
         return !!save && typeof save.id === "string" && !!save.gameState && !!save.gameConfig;
       })
-      .map((save) => ({
+      .map((save) => migrateSave({
         id: save.id as string,
         timestamp: typeof save.timestamp === "number" ? save.timestamp : Date.now(),
         gameState: save.gameState as PersistedGameState,
@@ -261,7 +295,7 @@ async function cloudLoadGame(id: string): Promise<SavedGame | null> {
     }
   }
 
-  return {
+  return migrateSave({
     id: save.id,
     timestamp: save.timestamp,
     gameState: save.gameState,
@@ -270,7 +304,7 @@ async function cloudLoadGame(id: string): Promise<SavedGame | null> {
     events: save.events || [],
     storySoFar: save.storySoFar,
     version: save.version || "2.0.0",
-  };
+  });
 }
 
 async function cloudListSavedGames(): Promise<SavedGame[]> {
