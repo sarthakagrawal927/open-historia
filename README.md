@@ -51,37 +51,37 @@ Traditional grand strategy games require complex menu navigation, steep learning
 ```mermaid
 graph TB
     subgraph "Frontend (Next.js 16 + React 19)"
-        UI[UI Components]
-        Map[Interactive Map<br/>MapLibre GL JS + Natural Earth]
-        Game[Game State Manager]
+        UI["UI Components"]
+        Map["Interactive Map - MapLibre GL JS"]
+        Game["Game State Manager"]
         UI --> Map
         UI --> Game
     end
 
     subgraph "API Layer (Next.js API Routes)"
-        Turn[/api/turn<br/>Execute Commands]
-        Chat[/api/chat<br/>Diplomacy]
-        Advisor[/api/advisor<br/>Strategic Advice]
-        Auth[/api/auth<br/>Better Auth]
-        Saves[/api/saves<br/>CRUD Operations]
+        Turn["api/turn - Execute Commands"]
+        Chat["api/chat - Diplomacy"]
+        Advisor["api/advisor - Strategic Advice"]
+        Auth["api/auth - Better Auth"]
+        Saves["api/saves - CRUD Operations"]
     end
 
     subgraph "AI Providers"
-        Claude[Claude API<br/>Anthropic]
-        GPT[GPT-4 API<br/>OpenAI]
-        Gemini[Gemini API<br/>Google]
-        DeepSeek[DeepSeek API]
-        Local[Local CLI Bridge<br/>Dev Mode]
+        Claude["Claude API (Anthropic)"]
+        GPT["GPT-4 API (OpenAI)"]
+        Gemini["Gemini API (Google)"]
+        DeepSeek["DeepSeek API"]
+        Local["Local CLI Bridge (Dev)"]
     end
 
     subgraph "Data Storage"
-        Turso[(Turso SQLite<br/>Cloud DB)]
-        LocalStorage[Browser LocalStorage<br/>Offline Saves]
+        Turso[("Turso SQLite - Cloud DB")]
+        LocalStorage["Browser LocalStorage - Offline Saves"]
     end
 
     subgraph "External Data"
-        NaturalEarth[Natural Earth<br/>Map Data]
-        WorldAtlas[World Atlas<br/>TopoJSON]
+        NaturalEarth["Natural Earth - Map Data"]
+        WorldAtlas["World Atlas - TopoJSON"]
     end
 
     UI --> Turn
