@@ -11,9 +11,9 @@ import { callLocalAI } from "../../../lib/local-ai";
 import { getClientIp, rateLimit } from "../../../lib/rate-limit";
 import { parseAiTurnResponse } from "../../../lib/turn-parser";
 import type { WorkerEnv } from "../../../lib/worker-env";
+import { resolveWorkersAiModel } from "../../../lib/workers-ai-model";
 
 const DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview";
-const DEFAULT_WORKERS_AI_MODEL = "@cf/meta/llama-3.1-8b-instruct";
 const FALLBACK_GEMINI_MODELS = [
   "gemini-3-flash-preview",
   "gemini-2.5-flash",
@@ -220,12 +220,7 @@ async function callProvider(
     }
     case "free-ai": {
       if (env.AI) {
-        const configuredModel = config.model?.trim();
-        const model = configuredModel?.startsWith("@cf/")
-          ? configuredModel
-          : env.AI_MODEL?.startsWith("@cf/")
-            ? env.AI_MODEL
-            : DEFAULT_WORKERS_AI_MODEL;
+        const model = resolveWorkersAiModel(config.model, env.AI_MODEL);
         const workersAi = createWorkersAI({ binding: env.AI });
         const result = await generateText({
           model: workersAi(model),
