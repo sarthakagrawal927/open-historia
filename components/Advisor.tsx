@@ -195,7 +195,7 @@ export default function Advisor({
     return (
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-36 right-4 z-40 w-12 h-12 rounded-full bg-teal-700/90 hover:bg-teal-600 border border-teal-500/40 shadow-lg shadow-teal-900/40 backdrop-blur-md flex items-center justify-center transition-all duration-200 hover:scale-110 group"
+        className="campaign-advisor-toggle fixed bottom-36 right-[352px] z-40 w-12 h-12 rounded-full bg-teal-700/90 hover:bg-teal-600 border border-teal-500/40 shadow-lg shadow-teal-900/40 backdrop-blur-md flex items-center justify-center transition-all duration-200 hover:scale-110 group"
         aria-label="Open Strategic Advisor"
         title="Strategic Advisor"
       >
@@ -205,6 +205,7 @@ export default function Advisor({
             {"\u2726"}
           </div>
         </div>
+        <span className="hidden max-[1099px]:inline ml-2">Strategic advisor</span>
         {/* Pulse ring */}
         {messages.length > 0 && (
           <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-teal-400 rounded-full animate-ping opacity-60" />
@@ -223,7 +224,7 @@ export default function Advisor({
   return (
     <div
       className={`
-        fixed bottom-36 right-4 z-40
+        campaign-advisor-panel fixed bottom-36 right-4 z-40
         w-[320px] flex flex-col
         bg-slate-950/95 border border-teal-800/50
         rounded-xl shadow-2xl shadow-black/40

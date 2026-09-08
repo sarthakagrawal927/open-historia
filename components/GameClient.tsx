@@ -264,130 +264,12 @@ function GameClientInner({ initialGameId }: { initialGameId?: string } = {}) {
 
   // Phase 3: Main game
   const { gameState } = game;
-  const timelineBarHeight = 140;
 
   return (
-    <main className="relative w-screen h-screen overflow-hidden bg-slate-950 text-slate-100">
-      {/* Map */}
-      {gameState && (
-        <MapView
-          provinces={gameState.provinces}
-          players={gameState.players}
-          onSelectProvince={game.handleSelectProvince}
-          selectedProvinceId={gameState.selectedProvinceId}
-          theme={gameState.theme}
-          relations={relations}
-        />
-      )}
-
-      {/* Diplomacy Chat (top-right) */}
-      {gameState && (
-        <DiplomacyChat
-          chatThreads={diplomacy.chatThreads}
-          provinces={gameState.provinces}
-          players={gameState.players}
-          playerNationName={gameState.players["player"].name}
-          currentYear={gameState.turn}
-          onSendMessage={diplomacy.handleSendChatMessage}
-          onCreateThread={diplomacy.handleCreateThread}
-          selectedProvinceId={gameState.selectedProvinceId}
-          processing={diplomacy.processingChat}
-        />
-      )}
-
-      {/* Command Terminal + Advance Button (bottom-left) */}
-      <div style={{ position: "absolute", bottom: timelineBarHeight, left: 16, zIndex: 20 }}>
-        <CommandTerminal logs={turn.logs} onCommand={turn.queueOrder} processing={turn.processingTurn} />
-        {/* Inline advance bar below terminal */}
-        <div className="mt-1 flex items-center gap-2 bg-slate-900/90 border border-slate-700 rounded px-2 py-1.5 backdrop-blur font-mono">
-          {turn.pendingOrders.length > 0 && (
-            <span className="text-amber-400 text-xs">
-              {turn.pendingOrders.length} order{turn.pendingOrders.length > 1 ? "s" : ""} queued
-            </span>
-          )}
-          {turn.pendingOrders.length === 0 && (
-            <span className="text-slate-500 text-xs">No orders queued</span>
-          )}
-          <button
-            onClick={() => turn.setPendingOrders([])}
-            disabled={turn.pendingOrders.length === 0 || turn.processingTurn}
-            className="text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30 px-1"
-            title="Clear queued orders"
-          >
-            Clear
-          </button>
-          <div className="flex-1" />
-          <button
-            onClick={turn.handleNextTurn}
-            disabled={turn.processingTurn}
-            className={`bg-amber-700 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-bold px-4 py-1 rounded transition-colors uppercase ${turn.processingTurn ? "animate-pulse-glow" : ""}`}
-          >
-            {turn.processingTurn ? "Processing..." : "Advance"}
-          </button>
-        </div>
-      </div>
-
-      {/* Timeline (bottom) — always visible during gameplay for empty-state guidance */}
-      <Timeline
-        snapshots={timeline.timelineSnapshots}
-        currentYear={gameState?.turn || 0}
-        onRewind={timeline.handleTimelineRewind}
-        onBranch={timeline.handleTimelineBranch}
-      />
-
-      {/* Advisor (floating) */}
-      {gameState && (
-        <Advisor
-          messages={advisor.advisorMessages}
-          onAskAdvisor={advisor.handleAskAdvisor}
-          processing={advisor.processingAdvisor}
-          playerNation={gameState.players["player"].name}
-          currentYear={gameState.turn}
-        />
-      )}
-
-      {/* Story Path (top-left) */}
-      {gameState && game.selectedPreset?.storyPath && (
-        <StoryPath
-          storyPath={game.selectedPreset.storyPath}
-          completedStepIds={turn.completedStepIds}
-        />
-      )}
-
-      {/* Relations Panel (bottom-right) */}
-      {gameState && relations.length > 0 && (
-        <div
-          className="absolute right-4 z-20"
-          style={{ bottom: timelineBarHeight }}
-        >
-          <RelationsPanel
-            relations={relations}
-            playerNationName={gameState.players["player"].name}
-          />
-        </div>
-      )}
-
-      {/* Processing overlay */}
-      {turn.processingTurn && (
-        <div className="absolute inset-0 z-30 pointer-events-none overflow-hidden">
-          <div
-            className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-amber-500/30 to-transparent"
-            style={{ animation: "scanline 2s linear infinite" }}
-          />
-          <div className="absolute inset-0 bg-slate-950/10" />
-        </div>
-      )}
-
-      {/* Save notification */}
-      {save.showSaveNotif && (
-        <div className="absolute top-20 right-4 text-sm text-emerald-400 font-mono bg-slate-900/90 px-3 py-2 rounded border border-emerald-700 shadow-lg animate-slide-down z-40">
-          Game Saved
-        </div>
-      )}
-
+    <main className="campaign-shell relative w-screen h-screen overflow-hidden bg-slate-950 text-slate-100">
       {/* Top Bar */}
       {gameState && (
-        <div className="absolute top-0 left-0 w-full p-2 bg-gradient-to-b from-slate-950/90 to-transparent pointer-events-none flex justify-center items-center gap-8 text-slate-200 font-mono text-lg z-10">
+        <div className="campaign-toolbar absolute top-0 left-0 w-full p-2 bg-gradient-to-b from-slate-950/90 to-transparent pointer-events-none flex justify-center items-center gap-8 text-slate-200 font-mono text-lg z-10">
           {/* On narrow screens the control pill exceeds the viewport — let it
               scroll inside itself (max-w-full + overflow-x-auto) so it never
               forces horizontal scroll on the whole page. */}
@@ -435,6 +317,7 @@ function GameClientInner({ initialGameId }: { initialGameId?: string } = {}) {
             <div className="w-px h-6 bg-slate-700" />
             <div className="flex items-center gap-2 pointer-events-auto">
               <select
+                aria-label="Time per turn"
                 value={turn.timeStep}
                 onChange={(e) => turn.setTimeStep(e.target.value)}
                 className="bg-slate-800 text-white text-xs border border-slate-700 rounded px-2 py-1 outline-none"
@@ -450,6 +333,7 @@ function GameClientInner({ initialGameId }: { initialGameId?: string } = {}) {
                   type="text"
                   value={turn.customTime}
                   onChange={(e) => turn.setCustomTime(e.target.value)}
+                  aria-label="Custom time per turn"
                   placeholder="e.g. 2 years"
                   className="bg-slate-800 text-white text-xs border border-slate-700 rounded px-2 py-1 w-20 outline-none"
                 />
@@ -466,9 +350,127 @@ function GameClientInner({ initialGameId }: { initialGameId?: string } = {}) {
         </div>
       )}
 
+      {/* Map */}
+      {gameState && (
+        <div className="campaign-map absolute inset-0">
+        <MapView
+          provinces={gameState.provinces}
+          players={gameState.players}
+          onSelectProvince={game.handleSelectProvince}
+          selectedProvinceId={gameState.selectedProvinceId}
+          theme={gameState.theme}
+          relations={relations}
+        />
+        </div>
+      )}
+
+      {/* Command Terminal + Advance Button (bottom-left) */}
+      <div className="campaign-commands absolute bottom-[140px] left-4 z-20">
+        <CommandTerminal logs={turn.logs} onCommand={turn.queueOrder} processing={turn.processingTurn} />
+        {/* Inline advance bar below terminal */}
+        <div className="mt-1 flex items-center gap-2 bg-slate-900/90 border border-slate-700 rounded px-2 py-1.5 backdrop-blur font-mono">
+          {turn.pendingOrders.length > 0 && (
+            <span className="text-amber-400 text-xs">
+              {turn.pendingOrders.length} order{turn.pendingOrders.length > 1 ? "s" : ""} queued
+            </span>
+          )}
+          {turn.pendingOrders.length === 0 && (
+            <span className="text-slate-500 text-xs">No orders queued</span>
+          )}
+          <button
+            onClick={() => turn.setPendingOrders([])}
+            disabled={turn.pendingOrders.length === 0 || turn.processingTurn}
+            className="text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30 px-1"
+            title="Clear queued orders"
+          >
+            Clear
+          </button>
+          <div className="flex-1" />
+          <button
+            onClick={turn.handleNextTurn}
+            disabled={turn.processingTurn}
+            className={`bg-amber-700 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-bold px-4 py-1 rounded transition-colors uppercase ${turn.processingTurn ? "animate-pulse-glow" : ""}`}
+          >
+            {turn.processingTurn ? "Processing..." : "Advance"}
+          </button>
+        </div>
+      </div>
+
+      {/* Story Path (top-left) */}
+      {gameState && game.selectedPreset?.storyPath && (
+        <StoryPath
+          storyPath={game.selectedPreset.storyPath}
+          completedStepIds={turn.completedStepIds}
+        />
+      )}
+
+      {/* Diplomacy Chat (top-right) */}
+      {gameState && (
+        <DiplomacyChat
+          chatThreads={diplomacy.chatThreads}
+          provinces={gameState.provinces}
+          players={gameState.players}
+          playerNationName={gameState.players["player"].name}
+          currentYear={gameState.turn}
+          onSendMessage={diplomacy.handleSendChatMessage}
+          onCreateThread={diplomacy.handleCreateThread}
+          selectedProvinceId={gameState.selectedProvinceId}
+          processing={diplomacy.processingChat}
+        />
+      )}
+
+      {/* Relations Panel (bottom-right) */}
+      {gameState && relations.length > 0 && (
+        <div
+          className="campaign-relations absolute bottom-[140px] right-4 z-20"
+        >
+          <RelationsPanel
+            relations={relations}
+            playerNationName={gameState.players["player"].name}
+          />
+        </div>
+      )}
+
+      {/* Advisor (floating) */}
+      {gameState && (
+        <Advisor
+          messages={advisor.advisorMessages}
+          onAskAdvisor={advisor.handleAskAdvisor}
+          processing={advisor.processingAdvisor}
+          playerNation={gameState.players["player"].name}
+          currentYear={gameState.turn}
+        />
+      )}
+
+      {/* Timeline (bottom) — always visible during gameplay for empty-state guidance */}
+      <Timeline
+        snapshots={timeline.timelineSnapshots}
+        currentYear={gameState?.turn || 0}
+        onRewind={timeline.handleTimelineRewind}
+        onBranch={timeline.handleTimelineBranch}
+      />
+
+      {/* Processing overlay */}
+      {turn.processingTurn && (
+        <div className="absolute inset-0 z-30 pointer-events-none overflow-hidden">
+          <div
+            className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-amber-500/30 to-transparent"
+            style={{ animation: "scanline 2s linear infinite" }}
+          />
+          <div className="absolute inset-0 bg-slate-950/10" />
+        </div>
+      )}
+
+      {/* Save notification */}
+      {save.showSaveNotif && (
+        <div className="campaign-save-notification pointer-events-none absolute top-20 right-4 text-sm text-emerald-400 font-mono bg-slate-900/90 px-3 py-2 rounded border border-emerald-700 shadow-lg animate-slide-down z-40">
+          Game Saved
+        </div>
+      )}
+
       {/* Saves Panel */}
       {save.showSavesPanel && (
-        <div className="absolute inset-0 z-40 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-40 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-3xl max-h-[85vh] overflow-hidden rounded-lg border border-slate-700 bg-slate-900 shadow-2xl">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
               <h2 className="text-sm uppercase tracking-wide text-slate-200 font-bold">

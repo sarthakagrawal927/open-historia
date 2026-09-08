@@ -619,8 +619,7 @@ export default function DiplomacyChat({
 
   return (
     <div
-      className="absolute top-4 right-4 z-30 flex flex-col font-mono"
-      style={{ width: 320, maxHeight: "80vh" }}
+      className="campaign-diplomacy absolute top-20 right-4 z-30 flex flex-col font-mono w-80 max-h-[80vh]"
     >
       {/* ================================================================== */}
       {/* HEADER BAR                                                         */}

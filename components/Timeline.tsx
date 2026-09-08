@@ -281,12 +281,9 @@ export default function Timeline({
     setActiveId((prev) => (prev === snapshotId ? null : snapshotId));
   };
 
-  // Render nothing meaningful if no snapshots and collapsed
-  if (snapshots.length === 0 && collapsed) return null;
-
   return (
     <div
-      className="absolute bottom-0 left-0 w-full z-30 select-none font-mono text-xs"
+      className="campaign-timeline absolute bottom-0 left-0 w-full z-30 select-none font-mono text-xs"
       style={{ pointerEvents: "auto" }}
     >
       {/* Collapse toggle tab */}

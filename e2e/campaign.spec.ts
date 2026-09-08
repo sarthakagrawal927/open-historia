@@ -2,7 +2,9 @@ import { expect, test } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
   await page.route('**/*', async route => {
-    if (new URL(route.request().url()).hostname !== '127.0.0.1') return route.abort();
+    const url = new URL(route.request().url());
+    // WebKit routes MapLibre blob workers too; allow only this local origin.
+    if (url.origin !== 'http://127.0.0.1:43187') return route.abort();
     if (route.request().url().includes('/api/auth/get-session')) {
       return route.fulfill({ json: null });
     }

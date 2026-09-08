@@ -424,6 +424,7 @@ export default function MapView({
 
   const hoveredIdRef = useRef<string | null>(null);
   const [warOpacity, setWarOpacity] = useState(0.6);
+  const [mapReady, setMapReady] = useState(false);
   const warAnimRef = useRef<number>(0);
   const didInitialZoomRef = useRef(false);
 
@@ -872,6 +873,7 @@ export default function MapView({
         role="application"
         aria-roledescription="Interactive world map"
         aria-label={accessibilityLabel}
+        aria-busy={!mapReady}
       >
         <MapGL
           ref={mapRef}
@@ -891,6 +893,7 @@ export default function MapView({
           renderWorldCopies={false}
           minZoom={1}
           onLoad={handleMapLoad}
+          onIdle={() => { if (!mapReady) setMapReady(true); }}
         >
           {/* Base fill: solid land color under all polygons to hide sub-pixel gaps */}
           <Source id="land-base" type="geojson" data={tier1GeoJSON} buffer={256} tolerance={0.375}>
@@ -1234,10 +1237,11 @@ export default function MapView({
                 "text-field": ["get", "name"],
                 "text-font": ["Open Sans Bold"],
                 "text-size": [
-                  "case",
-                  ["==", ["get", "major"], 1],
-                  ["interpolate", ["linear"], ["zoom"], 1, 11, 4, 16],
-                  ["interpolate", ["linear"], ["zoom"], 2, 9, 5, 12],
+                  "interpolate", ["linear"], ["zoom"],
+                  1, ["case", ["==", ["get", "major"], 1], 11, 9],
+                  2, ["case", ["==", ["get", "major"], 1], 12.6667, 9],
+                  4, ["case", ["==", ["get", "major"], 1], 16, 11],
+                  5, ["case", ["==", ["get", "major"], 1], 16, 12],
                 ],
                 "text-letter-spacing": [
                   "case",

@@ -38,7 +38,7 @@ export default function CommandTerminal({ logs, onCommand, processing }: Command
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
-  const endRef = useRef<HTMLDivElement>(null);
+  const logViewportRef = useRef<HTMLDivElement>(null);
   const prevLogCountRef = useRef(logs.length);
 
   // Track which logs are "new" (appended since last render) for entry animations
@@ -48,7 +48,8 @@ export default function CommandTerminal({ logs, onCommand, processing }: Command
   }, [logs.length]);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
+    const viewport = logViewportRef.current;
+    viewport?.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
   }, [logs]);
 
   // Derived state for suggestions
@@ -143,9 +144,9 @@ export default function CommandTerminal({ logs, onCommand, processing }: Command
   };
 
   return (
-    <div className="w-[32rem] max-w-[90vw] h-64 bg-slate-950/90 border border-slate-700 rounded-lg shadow-2xl flex flex-col font-mono text-sm overflow-hidden backdrop-blur-md">
+    <div className="campaign-terminal relative w-[32rem] max-w-[90vw] h-64 bg-slate-950/90 border border-slate-700 rounded-lg shadow-2xl flex flex-col font-mono text-sm overflow-hidden backdrop-blur-md">
       {/* Log Display */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+      <div ref={logViewportRef} className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
         {logs.length === 0 && (
             <div className="text-slate-500 italic">History awaits your command...</div>
         )}
@@ -225,12 +226,12 @@ export default function CommandTerminal({ logs, onCommand, processing }: Command
           </div>
         )}
 
-        <div ref={endRef} />
+
       </div>
 
       {/* Suggestions Dropdown */}
       {showSuggestions && filteredSuggestions.length > 0 && (
-        <div className="absolute bottom-16 left-4 w-[30rem] bg-slate-900/95 border border-slate-700 rounded-lg shadow-xl backdrop-blur-md max-h-48 overflow-y-auto">
+        <div className="absolute bottom-12 left-2 right-2 w-auto bg-slate-900/95 border border-slate-700 rounded-lg shadow-xl backdrop-blur-md max-h-48 overflow-y-auto">
           {filteredSuggestions.map((suggestion, idx) => (
             <div
               key={idx}

@@ -178,3 +178,5 @@ Browser → Cloudflare Worker
 - Deploy: push to `main` triggers GitHub Actions; PRs get preview workers.
 - Env validation: `pnpm validate:env:deploy` before production deploy.
 - `AGENTS.md` — comprehensive file map and prompt system for AI agents.
+
+- September 8 responsive repair: campaign panels reflow below 1100px; desktop diplomacy clears the toolbar; empty timeline can reopen; terminal scroll stays local. Map zoom-expression validation and same-origin WebKit worker testing are repaired. Source/browser verification and release evidence: artifacts/design/README.md. Live release qualification remains pending.

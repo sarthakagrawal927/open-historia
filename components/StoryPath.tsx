@@ -44,7 +44,7 @@ export default function StoryPath({
     return (
       <button
         onClick={() => setMinimized(false)}
-        className="fixed top-20 left-2 sm:left-4 z-40 px-3 py-2 bg-slate-900/90 border border-amber-500/30 rounded-lg shadow-xl backdrop-blur-md flex items-center gap-2 hover:bg-slate-800 transition-colors group max-w-[calc(100vw-1rem)]"
+        className="campaign-story fixed top-20 left-2 sm:left-4 z-40 px-3 py-2 bg-slate-900/90 border border-amber-500/30 rounded-lg shadow-xl backdrop-blur-md flex items-center gap-2 hover:bg-slate-800 transition-colors group max-w-[calc(100vw-1rem)]"
       >
         <span className="text-amber-400 text-sm">{"\u270E"}</span>
         <span className="text-slate-300 text-[10px] font-bold uppercase tracking-widest group-hover:text-amber-200">
@@ -55,7 +55,7 @@ export default function StoryPath({
   }
 
   return (
-    <div className="fixed top-20 left-2 sm:left-4 z-40 w-[min(18rem,calc(100vw-1rem))] bg-slate-950/90 border border-amber-900/40 rounded-xl shadow-2xl backdrop-blur-md overflow-hidden font-mono">
+    <div className="campaign-story fixed top-20 left-2 sm:left-4 z-40 w-[min(18rem,calc(100vw-1rem))] bg-slate-950/90 border border-amber-900/40 rounded-xl shadow-2xl backdrop-blur-md overflow-hidden font-mono">
       {/* Header */}
       <div className="bg-amber-900/20 px-3 py-2 border-b border-amber-900/40 flex items-center justify-between">
         <div className="flex items-center gap-2">

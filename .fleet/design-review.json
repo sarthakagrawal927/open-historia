@@ -1,0 +1,108 @@
+{
+  "$schema": "fleet.design-review.v1",
+  "version": 1,
+  "project": "open-historia",
+  "target": "Campaign mobile controls",
+  "surfaceMode": "operate",
+  "mode": "preserve",
+  "register": "product",
+  "context": {
+    "product": "PRODUCT.md",
+    "design": "DESIGN.md"
+  },
+  "direction": {
+    "references": [],
+    "probes": [],
+    "selected": "existing-design",
+    "approval": "not-required",
+    "before": "artifacts/design/before-390.png",
+    "library": {
+      "strategy": "upstream-first",
+      "primary": "existing-project-system",
+      "sources": [
+        "https://github.com/sarthakagrawal927/open-historia/blob/d7a9ecdf6c81ca6613f896a2c3744b8f623b833a/components/GameClient.tsx"
+      ],
+      "runtime": "existing",
+      "customReplacement": {
+        "used": false,
+        "authorization": "not-required",
+        "reason": ""
+      }
+    },
+    "contract": {
+      "purpose": "Open Historia helps strategy players explore a persistent campaign through natural-language orders, diplomacy and an interactive map.",
+      "purposeSource": "Site Health publicDirectory.projects.open-historia.purposeContract; PRODUCT.md; PROJECT_STATUS.md",
+      "canonicalPurpose": "Open Historia explores a local AI grand-strategy game where countries remember history and carry it into future turns.",
+      "purposeAlignment": "match",
+      "driftNote": "The held lifecycle is preserved; responsive repair does not establish historical or cloud-save qualification.",
+      "audience": "Strategy players interested in emergent historical storytelling without metered model credits.",
+      "job": "Inspect the map, queue an order, advance time, read consequences and save the campaign on a small screen.",
+      "thesis": "Preserve the dark cartographic terminal, but assign each panel its own space when overlays cannot fit.",
+      "system": "Existing slate panels and mono controls; amber actions, emerald saves, teal advisor. Wrapping toolbar and vertical flow below 1100px; existing map overlays above.",
+      "signature": "The country map stays adjacent to the order terminal; generated consequences lead into story and diplomatic history.",
+      "risk": "A vertical campaign needs scrolling to secondary tools. This preserves every tool and removes overlap without adding a new tab navigation system."
+    }
+  },
+  "evidence": {
+    "screenshots": [
+      {
+        "width": 390,
+        "path": "artifacts/design/after-390-desktop.png"
+      },
+      {
+        "width": 768,
+        "path": "artifacts/design/after-768-desktop.png"
+      },
+      {
+        "width": 1440,
+        "path": "artifacts/design/after-1440-desktop.png"
+      }
+    ],
+    "projectCheck": {
+      "command": "pnpm typecheck && pnpm lint && pnpm test && pnpm exec playwright test e2e/campaign-layout.spec.ts e2e/campaign.spec.ts --project=desktop --project=mobile",
+      "status": "pass"
+    },
+    "critique": {
+      "score": 33,
+      "maximum": 40
+    },
+    "audit": {
+      "score": 16,
+      "maximum": 20
+    },
+    "unresolved": {
+      "p0": 0,
+      "p1": 0
+    },
+    "detector": {
+      "posture": "advisory",
+      "findings": []
+    },
+    "comprehension": {
+      "status": "not-applicable",
+      "reviewer": "",
+      "answers": {
+        "product": "",
+        "audience": "",
+        "value": "",
+        "mechanism": "",
+        "proof": "",
+        "nextAction": ""
+      },
+      "purposeScore": {
+        "product": 0,
+        "audience": 0,
+        "value": 0,
+        "mechanism": 0,
+        "proof": 0,
+        "nextAction": 0,
+        "total": 0
+      },
+      "mismatches": []
+    }
+  },
+  "ownerFeedback": {
+    "decision": "agent-selected",
+    "note": "Owner authorized sequential repairs and shipping; preserve lane selected from the existing campaign UI."
+  }
+}
