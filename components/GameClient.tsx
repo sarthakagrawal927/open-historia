@@ -299,7 +299,7 @@ function GameClientInner({ initialGameId }: { initialGameId?: string } = {}) {
           )}
           <button
             onClick={() => turn.setPendingOrders([])}
-            disabled={turn.pendingOrders.length === 0}
+            disabled={turn.pendingOrders.length === 0 || turn.processingTurn}
             className="text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30 px-1"
             title="Clear queued orders"
           >

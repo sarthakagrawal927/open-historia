@@ -2,7 +2,7 @@
 
 **Portfolio state (2026-07-10): Archived.** Preserve the repository and last known-good build; reopen only for an explicit new research decision.
 
-Last updated: 2026-08-01
+Last updated: 2026-09-08
 
 ## Why/What
 
@@ -69,6 +69,8 @@ Browser → Cloudflare Worker
 **De-OpenNext migration complete:** Vite SPA + Hono worker replaces prior OpenNext stack. README and `AGENTS.md` stack/deploy/structure sections were realigned to the Vite + Hono reality (2026-06-23); `package.json` scripts remain authoritative on commands.
 
 ## Timeline
+
+- **2026-09-08** — Guest qualification found a live retired-model error, dropped orders on failure and root-level save URLs returning 404. Source repairs keep campaign links under `/play/<id>`, retain year/orders until a successful AI response, and reject overlapping turn requests. Browser regression covers provider failure, retry, local save and reload. Release and remaining campaign quality are tracked in [issue 27](https://github.com/sarthakagrawal927/open-historia/issues/27); source tests alone do not qualify the live game.
 
 - **2026-08-02** — Migrated cloud-save and Better Auth persistence from Turso/libSQL to the project-owned Cloudflare D1 database; production now uses the `DB` binding.
 - **2026-08-01** — Completed a four-route public discovery boundary for `/`, `/play`, `/about`, and `/privacy`: canonical HTML metadata and crawlable fallback content, equivalent Markdown, and matching runtime sitemap and agent catalog. Dynamic play identifiers, saves, auth/API paths, private game state, and archived Story Room remain excluded. No deployment, migration, or data publication was performed.

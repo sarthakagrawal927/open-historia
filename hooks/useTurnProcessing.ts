@@ -1,5 +1,5 @@
 
-import { useCallback,useState } from "react";
+import { useCallback,useRef,useState } from "react";
 
 import { loadPromptOverrides } from "@/components/PromptSettings";
 import { trackActivated, trackCoreAction } from "@/lib/analytics";
@@ -41,6 +41,7 @@ export function useTurnProcessing(deps: {
   } = deps;
 
   const [processingTurn, setProcessingTurn] = useState(false);
+  const turnInFlight = useRef(false);
   const [pendingOrders, setPendingOrders] = useState<string[]>([]);
   const [timeStep, setTimeStep] = useState("1m");
   const [customTime, setCustomTime] = useState("");
@@ -81,8 +82,10 @@ export function useTurnProcessing(deps: {
   );
 
   const processCommand = useCallback(
-    async (cmd: string, turnOverride?: number) => {
-      if (!gameState || !gameConfig || processingTurn) return;
+    async (cmd: string, turnOverride?: number, submittedOrders = 0) => {
+      if (!gameState || !gameConfig || turnInFlight.current) return;
+
+      turnInFlight.current = true;
 
       setProcessingTurn(true);
       const turnYear = turnOverride ?? gameState.turn;
@@ -144,6 +147,10 @@ export function useTurnProcessing(deps: {
           addLog(reason, "error");
           return;
         }
+
+        // Commit time and consume only the submitted queue after a successful turn.
+        setGameState((prev) => (prev ? { ...prev, turn: turnYear } : null));
+        setPendingOrders((prev) => prev.slice(submittedOrders));
 
         if (data.message) {
           addLog(data.message, "info");
@@ -307,6 +314,7 @@ export function useTurnProcessing(deps: {
         console.error(err);
         addLog("Communication with HQ lost (Network Error).", "error");
       } finally {
+        turnInFlight.current = false;
         setProcessingTurn(false);
       }
     },
@@ -336,11 +344,7 @@ export function useTurnProcessing(deps: {
           ? 1
           : 0;
     const nextTurn = gameState.turn + yearDelta;
-    if (yearDelta > 0) {
-      setGameState((prev) => (prev ? { ...prev, turn: nextTurn } : null));
-    }
-    setPendingOrders([]);
-    processCommand(fullCommand, nextTurn);
+    processCommand(fullCommand, nextTurn, orders.length);
   }, [gameState, gameConfig, processingTurn, timeStep, customTime, pendingOrders, processCommand, setGameState]);
 
   return {

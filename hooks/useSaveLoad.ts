@@ -56,7 +56,7 @@ export function useSaveLoad(deps: {
       const id = currentGameId || uid();
       if (!currentGameId) {
         setCurrentGameId(id);
-        window.history.replaceState(null, "", `/${id}`);
+        window.history.replaceState(null, "", `/play/${encodeURIComponent(id)}`);
       }
       await saveGame(gameState, gameConfig, logs, id, events, storySoFar, completedStepIds);
       setLastSaveTime(Date.now());
@@ -77,7 +77,7 @@ export function useSaveLoad(deps: {
     if (!gameState || !gameConfig) return;
     await handleSaveGame();
     setCurrentGameId(null);
-    window.history.replaceState(null, "", "/");
+    window.history.replaceState(null, "", "/play");
   }, [gameState, gameConfig, handleSaveGame]);
 
   // Set game ID when a new game starts

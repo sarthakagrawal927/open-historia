@@ -130,7 +130,7 @@ export function useGameState(initialGameId?: string) {
   const handleStartGame = useCallback(
     (config: GameConfig) => {
       const gameId = uid();
-      window.history.replaceState(null, "", `/${gameId}`);
+      window.history.replaceState(null, "", `/play/${encodeURIComponent(gameId)}`);
 
       setGameConfig(config);
 
@@ -219,7 +219,7 @@ export function useGameState(initialGameId?: string) {
       }
       setGameState(restoredState);
       setShowPresets(false);
-      window.history.replaceState(null, "", `/${saveId}`);
+      window.history.replaceState(null, "", `/play/${encodeURIComponent(saveId)}`);
 
       return {
         config: saved.gameConfig,
