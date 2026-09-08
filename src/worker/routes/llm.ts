@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { generateText, NoObjectGeneratedError, Output } from "ai";
+import { generateText, jsonSchema, NoObjectGeneratedError, Output } from "ai";
 import { Hono } from "hono";
 import { createWorkersAI } from "workers-ai-provider";
 
@@ -176,11 +176,42 @@ const sanitizePromptOverrides = (raw: unknown): Record<string, string> | undefin
   return Object.keys(out).length > 0 ? out : undefined;
 };
 
+const AI_RESPONSE_SCHEMAS = {
+  turn: {
+    type: "object",
+    properties: {
+      message: { type: "string" },
+      updates: { type: "array", items: { type: "object", additionalProperties: true } },
+      storySoFar: { type: "string" },
+    },
+    required: ["message", "updates", "storySoFar"],
+  },
+  chat: {
+    type: "object",
+    properties: {
+      message: { type: "string" },
+      tone: { type: "string" },
+      relationChange: { type: ["object", "null"], additionalProperties: true },
+    },
+    required: ["message", "tone", "relationChange"],
+  },
+  advisor: {
+    type: "object",
+    properties: {
+      advice: { type: "string" },
+      category: { type: "string" },
+      suggestedActions: { type: "array", items: { type: "string" } },
+    },
+    required: ["advice", "category", "suggestedActions"],
+  },
+} satisfies Record<string, Parameters<typeof jsonSchema>[0]>;
+
 async function callProvider(
   prompt: string,
   config: { provider: string; apiKey: string; model: string },
   systemPrompt: string,
   env: WorkerEnv,
+  responseKind: keyof typeof AI_RESPONSE_SCHEMAS = "turn",
 ): Promise<string> {
   switch (config.provider) {
     case "local": {
@@ -227,7 +258,7 @@ async function callProvider(
             model: workersAi(model),
             // Turn narratives and compressed memory need more than the provider default.
             maxOutputTokens: 2048,
-            output: Output.json(),
+            output: Output.object({ schema: jsonSchema(AI_RESPONSE_SCHEMAS[responseKind]) }),
             system: systemPrompt,
             prompt,
             maxRetries: 0,
@@ -426,11 +457,13 @@ llm.post("/turn", async (c) => {
       parsedTurn.parseError ? 502 : 200,
     );
   } catch (error) {
-    console.error("AI Error:", error);
+    console.error("AI Error:", error instanceof LLMTimeoutError ? "timeout" : "provider-or-response");
     const status = error instanceof LLMTimeoutError ? 504 : 500;
     return c.json(
       {
-        message: `The Game Master encountered an error: ${error instanceof Error ? error.message : "Internal Server Error"}`,
+        message: error instanceof LLMTimeoutError
+          ? "The Game Master took too long. No changes were applied — try again."
+          : "The Game Master is unavailable. No changes were applied — try again.",
         updates: [],
       },
       status,
@@ -498,6 +531,7 @@ llm.post("/chat", async (c) => {
         config,
         "You are a JSON-only response bot for a grand strategy game's diplomacy system. Never explain your answer, only return valid JSON.",
         c.env,
+        "chat",
       ),
       config.provider,
     );
@@ -508,7 +542,7 @@ llm.post("/chat", async (c) => {
 
     return c.json(sanitized);
   } catch (error) {
-    console.error("Diplomacy Chat Error:", error);
+    console.error("Diplomacy Chat Error:", "provider-or-response");
     const status = error instanceof LLMTimeoutError ? 504 : 500;
     return c.json(
       {
@@ -516,7 +550,7 @@ llm.post("/chat", async (c) => {
           "The diplomatic envoy was unable to deliver the message. A courier returns with troubling news of communication failure.",
         tone: "neutral" as DiplomacyTone,
         relationChange: null,
-        error: error instanceof Error ? error.message : "Internal Server Error",
+        error: "The AI provider could not complete this request.",
       },
       status,
     );
@@ -576,6 +610,7 @@ llm.post("/advisor", async (c) => {
         config,
         "You are a JSON-only response bot for a grand strategy game's advisor system. Never explain your answer, only return valid JSON.",
         c.env,
+        "advisor",
       ),
       config.provider,
     );
@@ -586,7 +621,7 @@ llm.post("/advisor", async (c) => {
 
     return c.json(sanitized);
   } catch (error) {
-    console.error("Advisor Error:", error);
+    console.error("Advisor Error:", "provider-or-response");
     const status = error instanceof LLMTimeoutError ? 504 : 500;
     return c.json(
       {
@@ -594,7 +629,7 @@ llm.post("/advisor", async (c) => {
           "Forgive me, my liege. An unforeseen disturbance has interrupted my counsel. I shall compose my thoughts and return shortly.",
         category: "general" as AdvisorCategory,
         suggestedActions: ["Wait and try consulting the advisor again"],
-        error: error instanceof Error ? error.message : "Internal Server Error",
+        error: "The AI provider could not complete this request.",
       },
       status,
     );

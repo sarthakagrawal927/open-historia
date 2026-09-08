@@ -32,7 +32,10 @@ describe('turn route through the real Workers AI adapter', () => {
     expect(run).toHaveBeenCalledOnce();
     expect(run.mock.calls[0][0]).toBe('@cf/meta/llama-3.1-8b-instruct-fast');
     expect(run.mock.calls[0][1].max_tokens).toBe(2048);
-    expect(run.mock.calls[0][1].response_format.type).toBe('json_schema');
+    expect(run.mock.calls[0][1].response_format).toMatchObject({
+      type: 'json_schema',
+      json_schema: { type: 'object', required: ['message', 'updates', 'storySoFar'] },
+    });
     expect(JSON.stringify(run.mock.calls[0][1].messages)).toContain('United Kingdom');
     expect(await response.json()).toMatchObject({
       message: 'The agreement is accepted.',
@@ -48,6 +51,32 @@ describe('turn route through the real Workers AI adapter', () => {
     const response = await app.request('/turn', request, { AI: { run } });
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ storySoFar: 'Shipping access agreed.' });
+  });
+
+  it.each([
+    ['/chat', { message: 'Request aid.', playerNation: 'Britain', targetNation: 'France' },
+      { message: 'Agreed.', tone: 'friendly', relationChange: null }, ['message', 'tone', 'relationChange']],
+    ['/advisor', { question: 'How can we provide aid?', playerNation: 'Britain' },
+      { advice: 'Negotiate shipping access.', category: 'diplomacy', suggestedActions: ['Request access.'] },
+      ['advice', 'category', 'suggestedActions']],
+  ])('sends the matching response schema for %s', async (path, input, output, required) => {
+    const run = vi.fn().mockResolvedValue({ response: output });
+    const response = await app.request(path, { ...request, body: JSON.stringify({
+      ...input, config: { provider: 'free-ai', model: 'auto' },
+    }) }, { AI: { run } });
+    expect(response.status).toBe(200);
+    expect(run.mock.calls[0][1].response_format.json_schema.required).toEqual(required);
+  });
+
+  it('does not expose provider errors containing campaign prompts', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const run = vi.fn().mockRejectedValue(new Error('PRIVATE_CAMPAIGN_SENTINEL'));
+      const response = await app.request('/turn', request, { AI: { run } });
+      expect(response.status).toBe(500);
+      expect(await response.text()).not.toContain('PRIVATE_CAMPAIGN_SENTINEL');
+      expect(JSON.stringify(log.mock.calls)).not.toContain('PRIVATE_CAMPAIGN_SENTINEL');
+    } finally { log.mockRestore(); }
   });
 
   it('does not return state updates when model output is malformed', async () => {
