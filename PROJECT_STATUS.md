@@ -70,6 +70,8 @@ Browser → Cloudflare Worker
 
 ## Timeline
 
+- **2026-09-08** — Live replacement-model call reached inference but returned unreadable JSON. Follow-up requests JSON output explicitly with a 2048-token budget; adapter tests cover text and structured responses, memory retention and safe malformed-output handling. Live completion remains pending issue 27.
+
 - **2026-09-08** — Guest qualification found a live retired-model error, dropped orders on failure and root-level save URLs returning 404. Source repairs keep campaign links under `/play/<id>`, retain year/orders until a successful AI response, and reject overlapping turn requests. Browser regression covers provider failure, retry, local save and reload. Release and remaining campaign quality are tracked in [issue 27](https://github.com/sarthakagrawal927/open-historia/issues/27); source tests alone do not qualify the live game.
 
 - **2026-08-02** — Migrated cloud-save and Better Auth persistence from Turso/libSQL to the project-owned Cloudflare D1 database; production now uses the `DB` binding.

@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { generateText } from "ai";
+import { generateText, NoObjectGeneratedError, Output } from "ai";
 import { Hono } from "hono";
 import { createWorkersAI } from "workers-ai-provider";
 
@@ -222,13 +222,23 @@ async function callProvider(
       if (env.AI) {
         const model = resolveWorkersAiModel(config.model, env.AI_MODEL);
         const workersAi = createWorkersAI({ binding: env.AI });
-        const result = await generateText({
-          model: workersAi(model),
-          system: systemPrompt,
-          prompt,
-          maxRetries: 0,
-        });
-        return result.text || "{}";
+        try {
+          const result = await generateText({
+            model: workersAi(model),
+            // Turn narratives and compressed memory need more than the provider default.
+            maxOutputTokens: 2048,
+            output: Output.json(),
+            system: systemPrompt,
+            prompt,
+            maxRetries: 0,
+          });
+          return result.text || "{}";
+        } catch (error) {
+          // Keep malformed output on the existing safe parse-failure path.
+          // Do not log SDK errors containing the private campaign prompt/response.
+          if (NoObjectGeneratedError.isInstance(error)) return "";
+          throw error;
+        }
       }
       const baseURL = process.env.AI_BASE_URL?.trim();
       const apiKey = config.apiKey || process.env.AI_API_KEY?.trim();

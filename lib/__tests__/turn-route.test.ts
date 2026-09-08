@@ -24,18 +24,30 @@ describe('turn route through the real Workers AI adapter', () => {
       response: JSON.stringify({
         message: 'The agreement is accepted.',
         updates: [{ type: 'time', amount: 1 }],
-        updatedStorySoFar: 'A humanitarian agreement is in place.',
+        storySoFar: 'A humanitarian agreement is in place.',
       }),
     });
     const response = await app.request('/turn', request, { AI: { run } });
     expect(response.status).toBe(200);
     expect(run).toHaveBeenCalledOnce();
     expect(run.mock.calls[0][0]).toBe('@cf/meta/llama-3.1-8b-instruct-fast');
+    expect(run.mock.calls[0][1].max_tokens).toBe(2048);
+    expect(run.mock.calls[0][1].response_format.type).toBe('json_schema');
     expect(JSON.stringify(run.mock.calls[0][1].messages)).toContain('United Kingdom');
     expect(await response.json()).toMatchObject({
       message: 'The agreement is accepted.',
       updates: [{ type: 'time', amount: 1 }],
+      storySoFar: 'A humanitarian agreement is in place.',
     });
+  });
+
+  it('accepts structured binding output and retains campaign memory', async () => {
+    const run = vi.fn().mockResolvedValue({ response: {
+      message: 'Relief ships depart.', updates: [], storySoFar: 'Shipping access agreed.',
+    } });
+    const response = await app.request('/turn', request, { AI: { run } });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ storySoFar: 'Shipping access agreed.' });
   });
 
   it('does not return state updates when model output is malformed', async () => {
