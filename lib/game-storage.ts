@@ -1,4 +1,4 @@
-import type { GameConfig, GameEvent, GameState, MapTheme, Player, Province } from "./types";
+import type { GameConfig, GameEvent, GameState, Province } from "./types";
 
 export interface LogEntry {
   id: string;
@@ -11,13 +11,10 @@ type ProvinceOwnerSnapshot = {
   ownerId: string | null;
 };
 
-type GameStateSnapshot = {
-  turn: number;
-  players: Record<string, Player>;
-  selectedProvinceId: string | number | null;
-  theme: MapTheme;
-  provinceOwners: ProvinceOwnerSnapshot[];
-};
+type GameStateSnapshot = Pick<GameState,
+  "turn" | "players" | "selectedProvinceId" | "theme" | "relations" |
+  "chatThreads" | "timeline" | "advisorHistory" | "pendingOrders" | "completedStepIds"
+> & { provinceOwners: ProvinceOwnerSnapshot[] };
 
 type PersistedGameState = GameStateSnapshot | GameState;
 
@@ -34,7 +31,7 @@ export interface SavedGame {
 }
 
 const STORAGE_KEY = "open_historia_saves";
-const VERSION = "3.1.0";
+const VERSION = "3.2.0";
 
 const toProvinceKey = (id: string | number) => String(id);
 
@@ -52,6 +49,7 @@ const isLegacyGameState = (state: PersistedGameState): state is GameState => {
 const SAVE_MIGRATIONS: Record<string, (save: SavedGame) => SavedGame> = {
   "2.0.0": (save) => ({ ...save, version: VERSION }),
   "3.0.0": (save) => ({ ...save, version: VERSION }),
+  "3.1.0": (save) => ({ ...save, version: VERSION }),
 };
 
 function migrateSave(save: SavedGame): SavedGame {
@@ -64,11 +62,17 @@ function migrateSave(save: SavedGame): SavedGame {
   return current;
 }
 
-const toSnapshot = (gameState: GameState): GameStateSnapshot => ({
+const toSnapshot = (gameState: GameState, completedStepIds?: string[]): GameStateSnapshot => ({
   turn: gameState.turn,
   players: gameState.players,
   selectedProvinceId: gameState.selectedProvinceId,
   theme: gameState.theme,
+  relations: gameState.relations || [],
+  chatThreads: gameState.chatThreads || [],
+  timeline: gameState.timeline || [],
+  advisorHistory: gameState.advisorHistory || [],
+  pendingOrders: gameState.pendingOrders || [],
+  completedStepIds: gameState.completedStepIds ?? completedStepIds ?? [],
   provinceOwners: gameState.provinces.map((province) => ({
     id: province.id,
     ownerId: province.ownerId,
@@ -119,6 +123,12 @@ export function restoreSavedGameState(savedGame: SavedGame, baseProvinces: Provi
     provinces,
     selectedProvinceId: persistedState.selectedProvinceId,
     theme: persistedState.theme,
+    relations: persistedState.relations || [],
+    chatThreads: persistedState.chatThreads || [],
+    timeline: persistedState.timeline || [],
+    advisorHistory: persistedState.advisorHistory || [],
+    pendingOrders: persistedState.pendingOrders || [],
+    completedStepIds: persistedState.completedStepIds || savedGame.completedStepIds || [],
   };
 }
 
@@ -148,14 +158,14 @@ export function localSaveGame(
   completedStepIds?: string[]
 ): string {
   try {
-    const saves = localListSavedGames();
+    const saves = localListSavedGames(true);
     const id = saveName || createSaveId();
     const filtered = saves.filter((save) => save.id !== id);
 
     const newSave: SavedGame = {
       id,
       timestamp: Date.now(),
-      gameState: toSnapshot(gameState),
+      gameState: toSnapshot(gameState, completedStepIds),
       gameConfig,
       logs: logs.slice(-50),
       events: events.slice(-100),
@@ -191,12 +201,15 @@ export function localLoadGame(id: string): SavedGame | null {
   }
 }
 
-export function localListSavedGames(): SavedGame[] {
+export function localListSavedGames(strict = false): SavedGame[] {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
     if (!data) return [];
 
     const parsed = JSON.parse(data) as Partial<SavedGame>[];
+    if (!Array.isArray(parsed) || (strict && parsed.some((save) =>
+      !save || typeof save.id !== "string" || !save.gameState || !save.gameConfig
+    ))) throw new Error("Saved games data is unreadable; existing data was preserved.");
     const saves: SavedGame[] = parsed
       .filter((save): save is Partial<SavedGame> => {
         return !!save && typeof save.id === "string" && !!save.gameState && !!save.gameConfig;
@@ -225,6 +238,7 @@ export function localListSavedGames(): SavedGame[] {
 
     return uniqueById;
   } catch (error) {
+    if (strict) throw new Error("Saved games data is unreadable; existing data was preserved.");
     console.error("Failed to list saves:", error);
     return [];
   }
@@ -232,7 +246,7 @@ export function localListSavedGames(): SavedGame[] {
 
 export function localDeleteGame(id: string): void {
   try {
-    const saves = localListSavedGames();
+    const saves = localListSavedGames(true);
     const filtered = saves.filter((save) => save.id !== id);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
   } catch (error) {
@@ -310,7 +324,7 @@ async function cloudSaveGame(
       id,
       timestamp: Date.now(),
       version: VERSION,
-      gameState: toSnapshot(gameState),
+      gameState: toSnapshot(gameState, completedStepIds),
       gameConfig, // apiKey stripped server-side
       logs: logs.slice(-50),
       events: events.slice(-100),

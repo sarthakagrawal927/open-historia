@@ -14,7 +14,7 @@ import {
 } from "@/lib/game-storage";
 import { INITIAL_PLAYERS } from "@/lib/map-generator";
 import { GameConfig } from "@/lib/types";
-import type { GameEvent, GameState, MapTheme, Preset,Province } from "@/lib/types";
+import type { DiplomaticRelation, GameEvent, GameState, MapTheme, Preset,Province } from "@/lib/types";
 import { loadWorldDataDetailed } from "@/lib/world-loader";
 import { getPresetById } from "@/lib/presets";
 
@@ -29,6 +29,7 @@ function uid(): string {
 export function useGameState(initialGameId?: string) {
   const [gameConfig, setGameConfig] = useState<GameConfig | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
+  const [relations, setRelations] = useState<DiplomaticRelation[]>([]);
   const [loading, setLoading] = useState(true);
   const [provincesCache, setProvincesCache] = useState<Province[]>([]);
   const [showPresets, setShowPresets] = useState(true);
@@ -88,10 +89,11 @@ export function useGameState(initialGameId?: string) {
             setSelectedPreset(getPresetById(saved.gameConfig.presetId) || null);
           }
           setGameState(restoredState);
+          setRelations(restoredState.relations || []);
           setProvincesCache(restoredState.provinces);
           setInitialEvents(saved.events || []);
           setInitialStorySoFar(saved.storySoFar || "");
-          setInitialCompletedStepIds(saved.completedStepIds || []);
+          setInitialCompletedStepIds(saved.completedStepIds || restoredState.completedStepIds || []);
           setShowPresets(false);
           setInitialGameIdLoaded(initialGameId);
           const restoredLogs = saved.logs?.length ? saved.logs : [];
@@ -227,7 +229,7 @@ export function useGameState(initialGameId?: string) {
         provinces: restoredState.provinces,
         events: saved.events || [],
         storySoFar: saved.storySoFar || "",
-        completedStepIds: saved.completedStepIds || [],
+        completedStepIds: saved.completedStepIds || restoredState.completedStepIds || [],
         logs: saved.logs?.length ? saved.logs : [],
       };
     },
@@ -248,6 +250,8 @@ export function useGameState(initialGameId?: string) {
     setGameConfig,
     gameState,
     setGameState,
+    relations,
+    setRelations,
     loading,
     provincesCache,
     setProvincesCache,

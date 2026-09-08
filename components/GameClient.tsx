@@ -8,7 +8,7 @@ import { useSaveLoad } from "@/hooks/useSaveLoad";
 import { useTimeline } from "@/hooks/useTimeline";
 import { useTurnProcessing } from "@/hooks/useTurnProcessing";
 import type { LogEntry } from "@/lib/game-storage";
-import type { DiplomaticRelation,GameConfig } from "@/lib/types";
+import type { GameConfig } from "@/lib/types";
 
 import { MapLoadingState, MapUnavailableState } from "@/components/MapShell";
 
@@ -39,11 +39,9 @@ function uid(): string {
 // ---------------------------------------------------------------------------
 
 function GameClientInner({ initialGameId }: { initialGameId?: string } = {}) {
-  // ── Shared relation state (needed by turn processing, diplomacy, timeline, advisor) ──
-  const [relations, setRelations] = useState<DiplomaticRelation[]>([]);
-
   // ── Core game state + initialization ──
   const game = useGameState(initialGameId);
+  const { relations, setRelations } = game;
 
   // ── Timeline (needs setEvents and setRelations) ──
   // We pass a placeholder addLog first and fix after turn hook is created
@@ -85,7 +83,15 @@ function GameClientInner({ initialGameId }: { initialGameId?: string } = {}) {
 
   // ── Save/Load ──
   const save = useSaveLoad({
-    gameState: game.gameState,
+    gameState: game.gameState ? {
+      ...game.gameState,
+      relations,
+      chatThreads: diplomacy.chatThreads,
+      timeline: timeline.timelineSnapshots,
+      advisorHistory: advisor.advisorMessages,
+      pendingOrders: turn.pendingOrders,
+      completedStepIds: turn.completedStepIds,
+    } : null,
     gameConfig: game.gameConfig,
     logs: turn.logs,
     events: turn.events,
@@ -106,8 +112,12 @@ function GameClientInner({ initialGameId }: { initialGameId?: string } = {}) {
       turn.setEvents(game.initialEvents);
       turn.setStorySoFar(game.initialStorySoFar);
       turn.setCompletedStepIds(game.initialCompletedStepIds);
+      diplomacy.setChatThreads(game.gameState?.chatThreads || []);
+      timeline.setTimelineSnapshots(game.gameState?.timeline || []);
+      advisor.setAdvisorMessages(game.gameState?.advisorHistory || []);
+      turn.setPendingOrders(game.gameState?.pendingOrders || []);
     }
-  }, [game.initialLogs, game.initialEvents, game.initialStorySoFar, game.initialCompletedStepIds, turn]);
+  }, [game.initialLogs, game.initialEvents, game.initialStorySoFar, game.initialCompletedStepIds, game.gameState, turn, diplomacy, timeline, advisor]);
 
   // ── Game start handler (bridges game + turn + diplomacy + advisor state) ──
   const handleStartGame = useCallback(
@@ -135,22 +145,23 @@ function GameClientInner({ initialGameId }: { initialGameId?: string } = {}) {
       turn.setCompletedStepIds([]);
       setRelations([]);
     },
-    [game, save, diplomacy, advisor, timeline, turn]
+    [game, save, diplomacy, advisor, timeline, turn, setRelations]
   );
 
   // ── Load saved game handler ──
   const handleLoadSavedGame = useCallback(
     async (saveId: string) => {
+      if (turn.processingTurn) return;
       const result = await game.handleLoadSavedGame(saveId);
       if (!result) {
         turn.addLog(`Save "${saveId}" not found.`, "error");
         return;
       }
-      turn.setPendingOrders([]);
-      diplomacy.setChatThreads([]);
-      advisor.setAdvisorMessages([]);
-      timeline.setTimelineSnapshots([]);
-      setRelations([]);
+      turn.setPendingOrders(result.state.pendingOrders || []);
+      diplomacy.setChatThreads(result.state.chatThreads || []);
+      advisor.setAdvisorMessages(result.state.advisorHistory || []);
+      timeline.setTimelineSnapshots(result.state.timeline || []);
+      setRelations(result.state.relations || []);
       turn.setEvents(result.events);
       turn.setStorySoFar(result.storySoFar);
       turn.setCompletedStepIds(result.completedStepIds);
@@ -160,12 +171,12 @@ function GameClientInner({ initialGameId }: { initialGameId?: string } = {}) {
       ]);
       save.onLoadComplete(saveId);
     },
-    [game, turn, save, diplomacy, advisor, timeline]
+    [game, turn, save, diplomacy, advisor, timeline, setRelations]
   );
 
   // ── Save & Exit (reset all subsystems) ──
   const handleSaveAndExit = useCallback(async () => {
-    await save.handleSaveAndExit();
+    if (turn.processingTurn || !(await save.handleSaveAndExit())) return;
     game.setGameConfig(null);
     game.setGameState(null);
     game.setShowPresets(true);
@@ -179,7 +190,7 @@ function GameClientInner({ initialGameId }: { initialGameId?: string } = {}) {
     timeline.setTimelineSnapshots([]);
     advisor.setAdvisorMessages([]);
     await game.refreshSavedGames();
-  }, [save, game, turn, diplomacy, timeline, advisor]);
+  }, [save, game, turn, diplomacy, timeline, advisor, setRelations]);
 
   // ── Year flash tracking ──
   const prevTurnRef = useRef<number | null>(null);

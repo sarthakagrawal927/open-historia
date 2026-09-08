@@ -147,4 +147,6 @@ export type GameState = {
   chatThreads?: ChatThread[];
   timeline?: TimelineSnapshot[];
   advisorHistory?: AdvisorMessage[];
+  pendingOrders?: string[];
+  completedStepIds?: string[];
 };

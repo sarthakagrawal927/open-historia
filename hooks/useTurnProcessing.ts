@@ -149,7 +149,7 @@ export function useTurnProcessing(deps: {
         }
 
         // Commit time and consume only the submitted queue after a successful turn.
-        setGameState((prev) => (prev ? { ...prev, turn: turnYear } : null));
+        let nextGameState = { ...gameState, turn: turnYear };
         setPendingOrders((prev) => prev.slice(submittedOrders));
 
         if (data.message) {
@@ -176,8 +176,8 @@ export function useTurnProcessing(deps: {
               const newOwner = update.newOwnerId as string;
               const isPlayerCapture = newOwner === "player";
 
-              setGameState((prev) => {
-                if (!prev) return null;
+              {
+                const prev = nextGameState;
                 const pLower = provinceName.toLowerCase();
                 let target = prev.provinces.find(
                   (p) => p.name.toLowerCase() === pLower
@@ -197,15 +197,14 @@ export function useTurnProcessing(deps: {
                   );
                 }
                 if (target) {
-                  return {
+                  nextGameState = {
                     ...prev,
                     provinces: prev.provinces.map((p) =>
                       p.id === target.id ? { ...p, ownerId: newOwner } : p
                     ),
                   };
                 }
-                return prev;
-              });
+              }
 
               hasSignificantEvent = true;
               if (isPlayerCapture) {
@@ -278,6 +277,7 @@ export function useTurnProcessing(deps: {
           });
         }
 
+        setGameState(nextGameState);
         setEvents(nextEvents.length > MAX_EVENTS ? nextEvents.slice(-MAX_EVENTS) : nextEvents);
         setRelations(nextRelations);
 
@@ -299,7 +299,7 @@ export function useTurnProcessing(deps: {
                 gameStateSlim: {
                   turn: turnYear,
                   provinceOwners: Object.fromEntries(
-                    gameState.provinces.map((p) => [String(p.id), p.ownerId])
+                    nextGameState.provinces.map((p) => [String(p.id), p.ownerId])
                   ),
                   events: nextEvents.slice(-20),
                   relations: nextRelations,

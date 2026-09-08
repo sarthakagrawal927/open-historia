@@ -24,7 +24,11 @@ test('failed turn retains orders and year; retry commits once and save reloads',
     requests++;
     await route.fulfill(requests === 1
       ? { status: 503, json: { message: 'Synthetic provider unavailable' } }
-      : { json: { message: 'Humanitarian agreement accepted.', updates: [], storySoFar: 'Aid agreement established.' } });
+      : { json: { message: 'Humanitarian agreement accepted.', updates: [
+        { type: 'event', description: 'Aid agreement recorded.', eventType: 'diplomacy', year: 1940 },
+        { type: 'relation', nationA: 'United Kingdom', nationB: 'France', relationType: 'friendly' },
+        { type: 'owner', provinceName: 'France', newOwnerId: 'player' },
+      ], storySoFar: 'Aid agreement established.' } });
   });
   await startCampaign(page);
   await expect(page).toHaveURL(/\/play\/[^/]+$/);
@@ -41,12 +45,46 @@ test('failed turn retains orders and year; retry commits once and save reloads',
   await expect(page.getByText('No orders queued')).toBeVisible();
   await expect(page.getByText('1940', { exact: true }).first()).toBeVisible();
   expect(requests).toBe(2);
+  await input.fill('Prepare a follow-up shipment.');
+  await input.press('Enter');
   await page.getByRole('button', { name: /^save$/i }).click();
   await expect(page.getByText('Game saved.', { exact: true })).toBeVisible();
+  const savedState = await page.evaluate(() => JSON.parse(localStorage.getItem('open_historia_saves') || '[]')[0].gameState);
+  expect(savedState.relations).toHaveLength(1);
+  expect(savedState.timeline).toHaveLength(1);
+  expect(savedState.timeline[0].gameStateSlim.provinceOwners).toEqual(
+    Object.fromEntries(savedState.provinceOwners.map((p: { id: string; ownerId: string | null }) => [String(p.id), p.ownerId])),
+  );
   const savedUrl = page.url();
   await page.reload();
   await expect(page.getByRole('textbox', { name: /Enter orders/ })).toBeVisible();
   await expect(page.getByText('Humanitarian agreement accepted.')).toBeVisible();
   await expect(page.getByText('1940', { exact: true }).first()).toBeVisible();
   expect(page.url()).toBe(savedUrl);
+  await expect(page.getByRole('button', { name: /Relations.*1/i })).toBeVisible();
+  await expect(page.getByText('No timeline snapshots yet.', { exact: false })).toHaveCount(0);
+  await expect(page.getByText('1 order queued')).toBeVisible();
+  // Saving again proves that restored UI state, not just the old JSON, survives.
+  await page.getByRole('button', { name: /^save$/i }).click();
+  const restoredState = await page.evaluate(() => JSON.parse(localStorage.getItem('open_historia_saves') || '[]')[0].gameState);
+  expect(restoredState.relations).toEqual(savedState.relations);
+  expect(restoredState.timeline).toEqual(savedState.timeline);
+  expect(restoredState.pendingOrders).toEqual(['Prepare a follow-up shipment.']);
+});
+
+
+test('save failure keeps the active campaign open', async ({ page }) => {
+  await startCampaign(page);
+  const url = page.url();
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function(key, value) {
+      if (key === 'open_historia_saves') throw new DOMException('Synthetic quota limit', 'QuotaExceededError');
+      return original.call(this, key, value);
+    };
+  });
+  await page.getByRole('button', { name: /^save & exit$/i }).click();
+  await expect(page.getByText(/Save failed: Storage quota exceeded/)).toBeVisible();
+  await expect(page.getByRole('textbox', { name: /Enter orders/ })).toBeVisible();
+  expect(page.url()).toBe(url);
 });

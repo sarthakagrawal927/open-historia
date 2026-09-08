@@ -28,7 +28,9 @@ export function useTimeline(deps: {
       const restoredProvinces = gameState.provinces.map((p) => ({
         ...p,
         ownerId:
-          snapshot.gameStateSlim.provinceOwners[String(p.id)] ?? p.ownerId,
+          snapshot.gameStateSlim.provinceOwners[String(p.id)] === undefined
+            ? p.ownerId
+            : snapshot.gameStateSlim.provinceOwners[String(p.id)],
       }));
 
       setGameState({
