@@ -77,15 +77,15 @@ for (const width of [390, 768, 1440]) {
 
 
 test('branched campaign panels and timeline targets remain separate', async ({ page }, testInfo) => {
-  // Five settled viewport reflows exceed 60s on CI's software-rendered WebKit.
-  // Keep individual controls bounded so this cannot hide an inaccessible action.
-  test.setTimeout(120_000);
+  // Exercise native mobile in WebKit and desktop boundaries in Chromium.
+  // The separate retained harness covers all six viewport reflows.
   page.setDefaultTimeout(10_000);
   let turn = 0;
   await page.route('**/api/turn', route => route.fulfill({ json: {
     message: `Delegation report ${++turn}.`, updates: [{ type: "event", description: `Delegation ${turn}`, eventType: "diplomacy", year: 1939 + turn }], storySoFar: `Campaign memory ${turn}.`,
   } }));
-  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.setViewportSize(testInfo.project.name === "mobile"
+    ? { width: 390, height: 844 } : { width: 1280, height: 800 });
   await startCampaign(page);
   await page.getByRole('combobox').selectOption('1y');
   for (let i = 0; i < 2; i++) {
@@ -100,7 +100,7 @@ test('branched campaign panels and timeline targets remain separate', async ({ p
   await expect(page.getByText('Game saved.', { exact: true }).last()).toBeVisible();
   await page.reload();
   await expect(page.getByText('Delegation report 3.', { exact: true })).toBeVisible();
-  for (const width of [1280, 1100, 390, 768, 1440]) await test.step(`${width}px branch controls`, async () => {
+  for (const width of testInfo.project.name === "mobile" ? [390] : [1280, 1100, 1440]) await test.step(`${width}px branch controls`, async () => {
     await page.setViewportSize({ width, height: width === 1280 ? 800 : width === 1100 ? 741 : 1000 });
     await expect(page.getByRole('application')).toHaveAttribute('aria-busy', 'false');
     await page.waitForTimeout(1700);

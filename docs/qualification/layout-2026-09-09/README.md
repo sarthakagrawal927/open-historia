@@ -1,6 +1,6 @@
 # Campaign panel and branch layout — September 9, 2026
 
-Scoped source qualification; release receipt follows the exact checked source deployment. Open Historia remains an inactive experiment, not a qualified historical simulation.
+Scoped source and hosted layout qualification. Open Historia remains an inactive experiment, not a qualified historical simulation.
 
 ## Reproduced failures
 
@@ -14,7 +14,7 @@ Desktop story, commands and timeline share grid rows. The story header stays fix
 - Full browser suite: 24 passed, 2 intentionally skipped desktop copies of mobile-only tests. Final scoped campaign/layout rerun: 22 passed across Chromium and WebKit.
 - The regression performs three synthetic-provider turns through the real UI, rewinds, saves, reloads, checks each branch replay, panel separation, touch-target separation and the unobscured inline Advance button. Includes the 1100×741 boundary.
 - A separate fresh Chromium replay of the captured real campaign checks 390×844, 768×1000, 1280×800, 1440×1000, 1100×741 and 1280×720. Every view had zero panel overlap and zero target collisions. Story step-list expansion/collapse and every replay control worked. The saved timeline remained unchanged. No AI/provider writes were performed by this layout harness.
-- Initial hosted CI 34325773666 passed 21 cases but the five-viewport WebKit journey exhausted its 60s total test budget. Existing one-viewport WebKit cases took 35–48s there. Only that multi-viewport test now has 120s total, with 10s per-action deadlines and named viewport steps; no application assertion or release guard was weakened.
+- Initial hosted CI 34325773666 passed 21 cases but the five-viewport WebKit journey exhausted its 60s total test budget. Existing one-viewport WebKit cases took 35–48s there. A first adjustment to 120s still timed out on the final viewport in CI 34326491238 before passing on retry (about 78s). That green run was flaky, not an unqualified clean pass. The regression now assigns native 390px to WebKit and desktop boundaries to Chromium, with the original 60s total limit, 10s per-action deadlines and named steps. The independent six-viewport harness remains intact; no application assertion or release guard was weakened.
 - The original historical screenshots are preserved; automated tests now write run screenshots under Playwright output instead of overwriting dated receipts.
 
 [Measured after receipt](after-receipt.json) · [390px timeline](after-390-844-timeline.png) · [768px](after-768-1000.png) · [1280px](after-1280-800.png) · [1440px](after-1440-1000.png) · [minimum grid](after-1100-741.png) · [wide-short stacked view](after-1280-720.png) · [wide-short timeline](after-1280-720-timeline.png).
@@ -30,3 +30,11 @@ Preserve lane: the existing dark cartographic map, mono commands and amber actio
 Scoped critique: status 3, real-world match 3, control 4, consistency 4, prevention 3, recognition 3, efficiency 3, restraint 4, recovery 3, help 3 = 33/40. Scoped audit: accessibility 3, performance 3, theming 3, responsive behavior 4, implementation integrity 3 = 16/20. No P0/P1 remains in this panel/branch slice. This is not a product-wide accessibility certification. Small existing secondary type and truncated timeline descriptions remain P2 tradeoffs; full descriptions are available in replay. The deterministic source scan returned one `overused-font` warning for the existing Arial fallback at globals.css:25; changing the established font system is outside this repair. No dependencies, new animation system or unrelated visual redesign were added.
 
 Historical faction/map/scenario coherence and authenticated save qualification remain actionable in [issue 27](https://github.com/sarthakagrawal927/open-historia/issues/27). The earlier real AI turns and persistence proof are recorded [separately](../rewind-2026-09-09/README.md).
+
+## Hosted release
+
+Source `9445110fc7857238eadff2de27804deca754f380` passed [exact CI 34326491238](https://github.com/sarthakagrawal927/open-historia/actions/runs/34326491238) and all six maintained deploy gates. Existing `pnpm run deploy` validated configured secret names, built Vite/Astro assets and deployed Worker `e529a943-f06e-4529-9323-dd3a384d5fc7` at 100%, full-SHA tagged, deployment `21a0e2d9-30a1-4636-a6f5-c884b501a960` at `2026-09-09T08:05:24.296828Z`. Prior version `e4a26fe5-9d2f-46fd-83e6-228d1e8c7a75` is the recorded rollback. No migrations, production data writes, provider configuration changes or new dependencies.
+
+Fresh public Chromium contexts at all six recorded sizes passed the same story/replay controls and separation checks. The public `/play` entry returned HTTP 200 and loaded `/assets/app-DxSSGJvv.js`, matching the deployed build. A separate guest UI Save followed by reload at 390px and 1280px preserved all three snapshots, three relations, selected branch and summary. No non-GET API calls occurred. These are local-browser guest saves; the campaign URL alone does not share its browser-local data. No new AI responses were requested during this layout acceptance.
+
+[Live receipt](live-receipt.json) · [live desktop](live-desktop.png) · [live mobile](live-mobile.png) · [live mobile timeline](live-mobile-timeline.png). Inactive experiment status remains; issue 27 stays open for scenario coherence and authenticated persistence.
