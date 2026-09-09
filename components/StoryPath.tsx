@@ -72,7 +72,7 @@ export default function StoryPath({
         </button>
       </div>
 
-      <div className="p-3">
+      <div className="campaign-story-body p-3">
         <div className="flex items-baseline justify-between mb-2">
           <h3 className="text-slate-100 font-serif font-bold text-sm truncate">
             {storyPath.name}

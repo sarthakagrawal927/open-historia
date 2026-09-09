@@ -69,8 +69,67 @@ for (const width of [390, 768, 1440]) {
       window.scrollTo(0, 0);
     });
     await expect(page.locator('.campaign-toolbar')).toBeInViewport();
-    await page.screenshot({ path: `artifacts/design/after-${width}-${testInfo.project.name}.png` });
+    await page.screenshot({ path: testInfo.outputPath(`after-${width}-${testInfo.project.name}.png`) });
     writeFileSync(testInfo.outputPath('browser-errors.json'), JSON.stringify(errors, null, 2));
     expect(errors.filter(error => /layers\.|WebGL|TypeError/i.test(error))).toEqual([]);
   });
 }
+
+
+test('branched campaign panels and timeline targets remain separate', async ({ page }, testInfo) => {
+  let turn = 0;
+  await page.route('**/api/turn', route => route.fulfill({ json: {
+    message: `Delegation report ${++turn}.`, updates: [{ type: "event", description: `Delegation ${turn}`, eventType: "diplomacy", year: 1939 + turn }], storySoFar: `Campaign memory ${turn}.`,
+  } }));
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await startCampaign(page);
+  await page.getByRole('combobox').selectOption('1y');
+  for (let i = 0; i < 2; i++) {
+    await page.getByRole('button', { name: /^advance$/i }).first().click();
+    await expect(page.getByText(`Delegation report ${i + 1}.`, { exact: true })).toBeVisible();
+  }
+  await page.getByRole('button', { name: /^Turn 1940:/ }).click();
+  await page.getByRole('button', { name: 'Rewind', exact: true }).click();
+  await page.getByRole('button', { name: /^advance$/i }).first().click();
+  await expect(page.getByText('Delegation report 3.', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /^save$/i }).click();
+  await expect(page.getByText('Game saved.', { exact: true }).last()).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('Delegation report 3.', { exact: true })).toBeVisible();
+  for (const width of [1280, 1100, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: width === 1280 ? 800 : width === 1100 ? 741 : 1000 });
+    await expect(page.getByRole('application')).toHaveAttribute('aria-busy', 'false');
+    await page.waitForTimeout(1700);
+    if (width >= 1100) {
+      const story = await page.locator('.campaign-story').boundingBox();
+      const terminal = await page.locator('.campaign-commands').boundingBox();
+      expect(story!.y + story!.height).toBeLessThanOrEqual(terminal!.y - 8);
+      const advance = page.locator('.campaign-commands').getByRole('button', { name: /^advance$/i });
+      expect(await advance.evaluate(el => {
+        const r = el.getBoundingClientRect(); return el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+      })).toBe(true);
+      await page.getByRole('button', { name: 'Expand step list' }).click();
+      await page.getByRole('button', { name: 'Collapse step list' }).click();
+      await page.locator('.campaign-story-body').evaluate(el => { el.scrollTop = 0; });
+    }
+    await page.locator('.campaign-timeline').scrollIntoViewIfNeeded();
+    const nodes = page.getByRole('button', { name: /^Turn 194[01]:/ });
+    await expect(nodes).toHaveCount(3);
+    const boxes = await nodes.evaluateAll(elements => elements.map(el => {
+      const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+    }));
+    for (const [index, a] of boxes.entries()) {
+      expect(a.width).toBeGreaterThanOrEqual(44);
+      expect(a.height).toBeGreaterThanOrEqual(44);
+      for (const b of boxes.slice(index + 1)) {
+        expect(a.x < b.right && a.right > b.x && a.y < b.bottom && a.bottom > b.y).toBe(false);
+      }
+    }
+    for (let i = 0; i < 3; i++) {
+      await nodes.nth(i).click();
+      await expect(page.getByText('Turn Replay', { exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    }
+    await page.screenshot({ path: testInfo.outputPath(`branches-${width}.png`) });
+  }
+});

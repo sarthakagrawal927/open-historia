@@ -276,7 +276,57 @@ input[type="number"] {
 }
 
 /* Campaign panels need separate space when the map cannot carry overlays. */
-@media (max-width: 1099px) {
+/* Share vertical space instead of stacking independent desktop overlays. */
+@media (min-width: 1100px) and (min-height: 741px) {
+  .campaign-shell {
+    display: grid;
+    grid-template-columns: 32rem minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto auto;
+    gap: 12px;
+    padding: 80px 16px 0;
+  }
+  .campaign-story {
+    position: relative;
+    inset: auto;
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 0;
+    max-height: 100%;
+    align-self: start;
+  }
+  div.campaign-story { display: flex; flex-direction: column; }
+  .campaign-story > :first-child { flex-shrink: 0; }
+  .campaign-story-body { overflow-y: auto; min-height: 0; }
+  .campaign-commands {
+    position: relative;
+    inset: auto;
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .campaign-timeline > button {
+    left: calc(32rem + 32px);
+    translate: none;
+  }
+  .campaign-relations, .campaign-advisor-toggle {
+    position: relative;
+    inset: auto;
+    grid-column: 2;
+    grid-row: 2;
+    align-self: end;
+    justify-self: end;
+  }
+  .campaign-advisor-toggle { margin-right: 336px; }
+  .campaign-timeline {
+    position: relative;
+    inset: auto;
+    grid-column: 1 / -1;
+    grid-row: 3;
+    width: calc(100% + 32px);
+    margin-inline: -16px;
+  }
+}
+
+@media (max-width: 1099px), (max-height: 740px) {
   .campaign-shell {
     display: flex;
     flex-direction: column;

@@ -152,7 +152,7 @@ test('older snapshots remain inspectable without inventing rewind memory', async
     const rect = element.getBoundingClientRect();
     return element.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
   })).toBe(true);
-  await page.screenshot({ path: `docs/qualification/rewind-2026-09-09/legacy-${testInfo.project.name}.png` });
+  await page.screenshot({ path: testInfo.outputPath(`legacy-${testInfo.project.name}.png`) });
 });
 
 

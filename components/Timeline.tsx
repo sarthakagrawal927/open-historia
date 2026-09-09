@@ -152,15 +152,15 @@ function buildBranches(snapshots: TimelineSnapshot[]): BranchInfo[] {
 // ---------------------------------------------------------------------------
 
 const ZOOM_LEVELS: Record<"compact" | "normal" | "wide", number> = {
-  compact: 70,
+  compact: 120,
   normal: 140,
   wide: 220,
 };
 const NODE_RADIUS = 7;
 const CURRENT_RADIUS = 11;
-const BRANCH_VERTICAL_GAP = 26;
-// Keep nodes below the 44px touch controls, including on narrow screens.
-const TRACK_Y = 72;
+const BRANCH_VERTICAL_GAP = 80;
+// Coordinates are relative to the scrollable graph below the controls.
+const TRACK_Y = 24;
 
 export default function Timeline({
   snapshots,
@@ -184,6 +184,8 @@ export default function Timeline({
   // Determine the last snapshot in the primary branch as "current"
   const branches = useMemo(() => buildBranches(snapshots), [snapshots]);
   const primaryBranch = branches[0] || null;
+  const graphHeight = Math.max(80, branches.length * BRANCH_VERTICAL_GAP);
+  const panelHeight = Math.min(240, 56 + graphHeight);
   const currentSnapshotId = activeSnapshotId ?? (primaryBranch
     ? primaryBranch.nodeIds[primaryBranch.nodeIds.length - 1]
     : null);
@@ -232,6 +234,7 @@ export default function Timeline({
     if (!pos) return;
     scrollRef.current.scrollTo({
       left: pos.x - scrollRef.current.clientWidth / 2,
+      top: pos.y - TRACK_Y,
       behavior: "smooth",
     });
   }, [layout]);
@@ -302,8 +305,9 @@ export default function Timeline({
       {/* Main bar */}
       <div
         className={`bg-slate-950/90 border-t border-slate-700 backdrop-blur-md transition-all duration-300 ease-in-out ${
-          collapsed ? "h-0 border-t-0 pointer-events-none opacity-0" : "h-[120px]"
+          collapsed ? "border-t-0 pointer-events-none opacity-0" : ""
         }`}
+        style={{ height: collapsed ? 0 : panelHeight }}
       >
         {snapshots.length === 0 ? (
           <div className="flex items-center justify-center h-20 text-slate-600 italic">
@@ -312,8 +316,8 @@ export default function Timeline({
         ) : (
           <div
             ref={scrollRef}
-            className="overflow-x-auto overflow-y-visible cursor-grab outline-none"
-            style={{ height: "120px" }}
+            className="overflow-auto cursor-grab outline-none relative top-14"
+            style={{ height: panelHeight - 56 }}
             tabIndex={0}
             role="region"
             aria-label="History timeline — use left/right arrows to step through turns"
@@ -345,11 +349,11 @@ export default function Timeline({
             }}
           >
             {/* SVG track layer for lines and branch connectors */}
-            <div className="relative" style={{ width: totalWidth, height: 120 }}>
+            <div className="relative" style={{ width: totalWidth, height: graphHeight }}>
               <svg
                 className="absolute inset-0 pointer-events-none"
                 width={totalWidth}
-                height={120}
+                height={graphHeight}
                 xmlns="http://www.w3.org/2000/svg"
               >
                 {/* Branch lines */}
@@ -421,22 +425,15 @@ export default function Timeline({
                     key={snap.id}
                     className="absolute"
                     style={{
-                      left: pos.x - r,
-                      top: pos.y - r,
-                      width: r * 2,
-                      height: r * 2,
+                      left: pos.x - 22,
+                      top: pos.y - 22,
+                      width: 44,
+                      height: 44,
                     }}
                   >
                     {/* The clickable node */}
                     <button
-                      className={`
-                        w-full h-full rounded-full border-2 transition-all duration-200
-                        ${colors.fill}
-                        ${isCurrent
-                          ? `border-amber-300 shadow-[0_0_12px_3px] ${colors.glow} scale-110`
-                          : "border-slate-600 hover:border-slate-400 hover:scale-125"
-                        }
-                      `}
+                      className="group w-full h-full flex items-center justify-center rounded focus-visible:outline-2 focus-visible:outline-amber-400"
                       onMouseEnter={() => setHoveredId(snap.id)}
                       onMouseLeave={() => setHoveredId(null)}
                       onClick={(e) => {
@@ -444,11 +441,19 @@ export default function Timeline({
                         handleNodeClick(snap.id);
                       }}
                       aria-label={`Turn ${snap.turnYear}: ${snap.description}`}
-                    />
+                    >
+                      <span
+                        aria-hidden="true"
+                        style={{ width: r * 2, height: r * 2 }}
+                        className={`rounded-full border-2 transition-transform duration-200 ${colors.fill} ${isCurrent
+                          ? `border-amber-300 shadow-[0_0_12px_3px] ${colors.glow}`
+                          : "border-slate-600 group-hover:border-slate-400 group-hover:scale-125"}`}
+                      />
+                    </button>
 
                     {/* Year label below node */}
                     <div
-                      className={`absolute top-full left-1/2 -translate-x-1/2 mt-1.5 whitespace-nowrap text-[10px] ${
+                      className={`absolute top-full left-1/2 -translate-x-1/2 mt-0.5 whitespace-nowrap text-[11px] ${
                         isCurrent ? "text-amber-400 font-bold" : "text-slate-500"
                       }`}
                     >
@@ -457,7 +462,7 @@ export default function Timeline({
 
                     {/* Description label further below */}
                     <div
-                      className={`absolute top-full left-1/2 -translate-x-1/2 mt-5 whitespace-nowrap text-[9px] max-w-[120px] truncate text-center ${colors.badge}`}
+                      className={`absolute top-full left-1/2 -translate-x-1/2 mt-4 whitespace-nowrap text-[10px] max-w-[112px] truncate text-center ${colors.badge}`}
                     >
                       {truncate(snap.description, 22)}
                     </div>

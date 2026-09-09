@@ -346,4 +346,4 @@ This section is maintained by the SaaS Maker Active-AI product/design loop so fu
 
 ## Campaign qualification
 
-This remains a held experiment. The [September 9 guest rewind receipt](docs/qualification/rewind-2026-09-09/README.md) verifies local save/reload and complete prompt-memory rewind for newly recorded snapshots. Older snapshots are inspection-only when historical memory is absent. Historical faction/map quality, authenticated saves and live release acceptance remain in [issue 27](https://github.com/sarthakagrawal927/open-historia/issues/27).
+This remains a held experiment. The [September 9 guest rewind receipt](docs/qualification/rewind-2026-09-09/README.md) verifies local save/reload and complete prompt-memory rewind for newly recorded snapshots. Older snapshots are inspection-only when historical memory is absent. The [panel and branch layout receipt](docs/qualification/layout-2026-09-09/README.md) covers desktop panel separation and mobile timeline access. Historical faction/map quality and authenticated saves remain in [issue 27](https://github.com/sarthakagrawal927/open-historia/issues/27).
