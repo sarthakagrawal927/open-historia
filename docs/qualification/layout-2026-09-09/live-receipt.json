@@ -260,6 +260,7 @@
   "ciQualification": {
     "conclusion": "success",
     "flakyCase": "Five-viewport WebKit case exhausted 120s total on first attempt, passed existing retry in about 78s. Not a clean first-attempt run.",
-    "followup": "Native mobile and desktop boundary responsibilities separated; local retries-disabled focused run passed both browsers. Exact new CI pending."
+    "followup": "Test-only source 2dec77bdd09930acda66a4e9231626f2545a3af4 assigns native mobile and desktop boundary responsibilities separately; local retries-disabled focused run passed both browsers.",
+    "followupRun": "https://github.com/sarthakagrawal927/open-historia/actions/runs/34327596281"
   }
 }
