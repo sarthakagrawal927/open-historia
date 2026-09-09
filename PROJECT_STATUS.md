@@ -183,4 +183,4 @@ Browser → Cloudflare Worker
 
 ### September 9 — bounded rewind source repair
 
-Guest rewind now restores saved prompt/context memory and the branch parent across reload; older incomplete snapshots remain inspection-only. Fixed timeline node/popup interaction defects found by actual desktop/mobile clicks and screenshots. See [qualification](docs/qualification/rewind-2026-09-09/README.md) and [issue 27](https://github.com/sarthakagrawal927/open-historia/issues/27). No deployment; held experiment and historical/cloud-save gates remain.
+Guest rewind now restores saved prompt/context memory and the branch parent across reload; older incomplete snapshots remain inspection-only. Fixed timeline node/popup interaction defects found by actual desktop/mobile clicks and screenshots. See [qualification](docs/qualification/rewind-2026-09-09/README.md) and [issue 27](https://github.com/sarthakagrawal927/open-historia/issues/27). Guarded source d6d052f is deployed at 100%; real guest rewind/save/reload and next-request parent checks pass at 390px, with final 1280px reopen. Held experiment, layout crowding and historical/cloud-save gates remain.
