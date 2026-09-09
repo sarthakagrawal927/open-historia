@@ -2,7 +2,7 @@
 
 **Portfolio state (2026-07-10): Archived.** Preserve the repository and last known-good build; reopen only for an explicit new research decision.
 
-Last updated: 2026-09-08
+Last updated: 2026-09-09
 
 ## Why/What
 
@@ -180,3 +180,7 @@ Browser → Cloudflare Worker
 - `AGENTS.md` — comprehensive file map and prompt system for AI agents.
 
 - September 8 responsive repair: campaign panels reflow below 1100px; desktop diplomacy clears the toolbar; empty timeline can reopen; terminal scroll stays local. Map zoom-expression validation and same-origin WebKit worker testing are repaired. Source/browser verification and release evidence: artifacts/design/README.md. Live release qualification remains pending.
+
+### September 9 — bounded rewind source repair
+
+Guest rewind now restores saved prompt/context memory and the branch parent across reload; older incomplete snapshots remain inspection-only. Fixed timeline node/popup interaction defects found by actual desktop/mobile clicks and screenshots. See [qualification](docs/qualification/rewind-2026-09-09/README.md) and [issue 27](https://github.com/sarthakagrawal927/open-historia/issues/27). No deployment; held experiment and historical/cloud-save gates remain.

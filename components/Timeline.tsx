@@ -1,3 +1,5 @@
+import { isTimelineMemory } from "@/lib/timeline-memory";
+import { createPortal } from "react-dom";
 
 import React, { useCallback, useEffect, useMemo,useRef, useState } from "react";
 
@@ -7,6 +9,7 @@ import { diffTimelineSnapshots } from "@/lib/state-diff";
 interface TimelineProps {
   snapshots: TimelineSnapshot[];
   currentYear: number;
+  activeSnapshotId?: string | null;
   onRewind: (snapshotId: string) => void;
   onBranch: (snapshotId: string) => void;
 }
@@ -156,11 +159,13 @@ const ZOOM_LEVELS: Record<"compact" | "normal" | "wide", number> = {
 const NODE_RADIUS = 7;
 const CURRENT_RADIUS = 11;
 const BRANCH_VERTICAL_GAP = 26;
-const TRACK_Y = 40;
+// Keep nodes below the 44px touch controls, including on narrow screens.
+const TRACK_Y = 72;
 
 export default function Timeline({
   snapshots,
   currentYear,
+  activeSnapshotId,
   onRewind,
   onBranch,
 }: TimelineProps) {
@@ -179,9 +184,9 @@ export default function Timeline({
   // Determine the last snapshot in the primary branch as "current"
   const branches = useMemo(() => buildBranches(snapshots), [snapshots]);
   const primaryBranch = branches[0] || null;
-  const currentSnapshotId = primaryBranch
+  const currentSnapshotId = activeSnapshotId ?? (primaryBranch
     ? primaryBranch.nodeIds[primaryBranch.nodeIds.length - 1]
-    : null;
+    : null);
 
   // Build a lookup: snapshotId -> { branchIndex, positionInBranch }
   const layout = useMemo(() => {
@@ -560,9 +565,9 @@ export default function Timeline({
 
         // Action popover (on click, non-current nodes)
         if (activeId === snap.id) {
-          return (
+          return createPortal(
             <div
-              className="fixed bg-slate-900/95 border border-slate-600 rounded-lg p-3 shadow-2xl backdrop-blur-lg z-[60] max-h-[min(70vh,28rem)] overflow-y-auto animate-scale-in"
+              className="fixed bg-slate-900/95 border border-slate-600 rounded-lg p-3 shadow-2xl backdrop-blur-lg z-[60] max-h-[min(70vh,28rem)] overflow-y-auto animate-fade-in"
               style={{
                 width: popoverWidth,
                 left: clampHorizontal(screenX, popoverWidth),
@@ -631,7 +636,8 @@ export default function Timeline({
                 </div>
               )}
 
-              {!isCurrent && (
+              {!isTimelineMemory(snap.memory) && <p className="text-amber-300 text-[11px] mb-2">Older snapshot: historical memory was not saved. Replay inspection only.</p>}
+              {!isCurrent && isTimelineMemory(snap.memory) && (
                 <div className="grid grid-cols-2 gap-1.5">
                   <button
                     onClick={(e) => {
@@ -664,13 +670,13 @@ export default function Timeline({
               >
                 Cancel
               </button>
-            </div>
+            </div>, document.body
           );
         }
 
         // Hover tooltip
         if (hoveredId === snap.id && !activeId) {
-          return (
+          return createPortal(
             <div
               className="fixed bg-slate-900/95 border border-slate-600 rounded-lg p-3 shadow-2xl backdrop-blur-lg pointer-events-none z-[60] animate-fade-in"
               style={{
@@ -712,7 +718,7 @@ export default function Timeline({
               <div className="text-slate-600 text-[9px] mt-1.5">
                 {formatTimestamp(snap.timestamp)}
               </div>
-            </div>
+            </div>, document.body
           );
         }
 

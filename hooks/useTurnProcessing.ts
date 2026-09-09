@@ -29,6 +29,7 @@ export function useTurnProcessing(deps: {
   relations: DiplomaticRelation[];
   setRelations: React.Dispatch<React.SetStateAction<DiplomaticRelation[]>>;
   timelineSnapshots: TimelineSnapshot[];
+  captureContext: () => Pick<NonNullable<TimelineSnapshot["memory"]>, "chatThreads" | "advisorHistory">;
   setTimelineSnapshots: React.Dispatch<React.SetStateAction<TimelineSnapshot[]>>;
 }) {
   const {
@@ -38,6 +39,7 @@ export function useTurnProcessing(deps: {
     relations,
     setRelations,
     setTimelineSnapshots,
+    captureContext,
   } = deps;
 
   const [processingTurn, setProcessingTurn] = useState(false);
@@ -89,6 +91,13 @@ export function useTurnProcessing(deps: {
 
       setProcessingTurn(true);
       const turnYear = turnOverride ?? gameState.turn;
+      const nextLogs = [...logs];
+      const recordLog = (text: string, type: LogEntry["type"] = "info") => {
+        const entry = { id: uid(), type, text };
+        nextLogs.push(entry);
+        setLogs((prev) => [...prev, entry].slice(-MAX_LOGS));
+      };
+      const nextCompletedStepIds = [...completedStepIds];
       let nextEvents = [...events];
       let nextRelations = [...relations];
 
@@ -144,7 +153,7 @@ export function useTurnProcessing(deps: {
                 : res.status === 502
                   ? "The Game Master returned an unreadable response. No changes were applied — try again."
                   : "The Game Master is unavailable right now. No changes were applied — try again.");
-          addLog(reason, "error");
+          recordLog(reason, "error");
           return;
         }
 
@@ -153,10 +162,10 @@ export function useTurnProcessing(deps: {
         setPendingOrders((prev) => prev.slice(submittedOrders));
 
         if (data.message) {
-          addLog(data.message, "info");
+          recordLog(data.message, "info");
         }
 
-        if (data.storySoFar) {
+        if (typeof data.storySoFar === "string") {
           setStorySoFar(data.storySoFar);
         }
 
@@ -208,10 +217,10 @@ export function useTurnProcessing(deps: {
 
               hasSignificantEvent = true;
               if (isPlayerCapture) {
-                addLog(`CAPTURED: ${provinceName} is now under your control!`, "capture");
+                recordLog(`CAPTURED: ${provinceName} is now under your control!`, "capture");
                 turnEvents.push(`Captured ${provinceName}`);
               } else {
-                addLog(`${provinceName} seized by ${newOwner}`, "war");
+                recordLog(`${provinceName} seized by ${newOwner}`, "war");
                 turnEvents.push(`${provinceName} fell to ${newOwner}`);
               }
             }
@@ -237,7 +246,7 @@ export function useTurnProcessing(deps: {
                 hasSignificantEvent = true;
                 turnEvents.push(update.description as string);
               }
-              addLog(update.description as string, logType);
+              recordLog(update.description as string, logType);
             }
 
             if (update.type === "relation") {
@@ -259,39 +268,46 @@ export function useTurnProcessing(deps: {
               hasSignificantEvent = true;
               const relType = update.relationType as string;
               const logType = (relType === "war" ? "war" : relType === "allied" ? "diplomacy" : "info") as LogEntry["type"];
-              addLog(`${update.nationA} ↔ ${update.nationB}: ${relType}`, logType);
+              recordLog(`${update.nationA} ↔ ${update.nationB}: ${relType}`, logType);
               turnEvents.push(`${update.nationA} & ${update.nationB} now ${relType}`);
             }
 
             if (update.type === "storyStep") {
               const stepId = (update as any).stepId as string;
               const msg = (update as any).message as string;
-              setCompletedStepIds((prev) => {
-                if (prev.includes(stepId)) return prev;
-                return [...prev, stepId];
-              });
-              addLog(`STORY ACHIEVED: ${msg}`, "success");
+              if (!nextCompletedStepIds.includes(stepId)) nextCompletedStepIds.push(stepId);
+              setCompletedStepIds(nextCompletedStepIds);
+              recordLog(`STORY ACHIEVED: ${msg}`, "success");
               hasSignificantEvent = true;
               turnEvents.push(`Story Achievement: ${msg}`);
             }
           });
         }
 
+        const snapshotId = hasSignificantEvent ? uid() : null;
+        if (snapshotId) nextGameState = { ...nextGameState, currentTimelineSnapshotId: snapshotId };
         setGameState(nextGameState);
         setEvents(nextEvents.length > MAX_EVENTS ? nextEvents.slice(-MAX_EVENTS) : nextEvents);
         setRelations(nextRelations);
 
         if (turnEvents.length > 0) {
           const summary = turnEvents.map((e) => `  - ${e}`).join("\n");
-          addLog(`--- Events This Period ---\n${summary}`, "event-summary");
+          recordLog(`--- Events This Period ---\n${summary}`, "event-summary");
         }
 
         if (hasSignificantEvent) {
+          const memory = {
+            ...captureContext(),
+            storySoFar: typeof data.storySoFar === "string" ? data.storySoFar : storySoFar,
+            logs: nextLogs.slice(-MAX_LOGS),
+            completedStepIds: nextCompletedStepIds,
+            pendingOrders: pendingOrders.slice(submittedOrders),
+          };
           setTimelineSnapshots((prev) => {
             const next = [
               ...prev,
               {
-                id: uid(),
+                id: snapshotId!,
                 turnYear,
                 timestamp: Date.now(),
                 description: turnEvents[0] || data.message?.slice(0, 100) || cmd.slice(0, 100),
@@ -301,10 +317,11 @@ export function useTurnProcessing(deps: {
                   provinceOwners: Object.fromEntries(
                     nextGameState.provinces.map((p) => [String(p.id), p.ownerId])
                   ),
-                  events: nextEvents.slice(-20),
+                  events: nextEvents.slice(-MAX_EVENTS),
                   relations: nextRelations,
                 },
-                parentSnapshotId: prev.length > 0 ? prev[prev.length - 1].id : null,
+                memory,
+                parentSnapshotId: gameState.currentTimelineSnapshotId ?? (prev.length > 0 ? prev[prev.length - 1].id : null),
               },
             ];
             return next.length > 50 ? next.slice(-50) : next;
@@ -318,7 +335,7 @@ export function useTurnProcessing(deps: {
         setProcessingTurn(false);
       }
     },
-    [gameState, gameConfig, processingTurn, logs, events, relations, storySoFar, completedStepIds, addLog, setGameState, setRelations, setTimelineSnapshots]
+    [gameState, gameConfig, processingTurn, logs, events, relations, storySoFar, completedStepIds, addLog, setGameState, setRelations, setTimelineSnapshots, captureContext, pendingOrders]
   );
 
   const handleNextTurn = useCallback(() => {

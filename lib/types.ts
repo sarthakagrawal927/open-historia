@@ -1,3 +1,4 @@
+import type { LogEntry } from "./game-storage";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type GeoFeature = any;
 
@@ -123,6 +124,14 @@ export type TimelineSnapshot = {
     events: GameEvent[];
     relations: DiplomaticRelation[];
   };
+  memory?: {
+    storySoFar: string;
+    logs: LogEntry[];
+    completedStepIds: string[];
+    pendingOrders: string[];
+    chatThreads: ChatThread[];
+    advisorHistory: AdvisorMessage[];
+  };
   parentSnapshotId: string | null;
 };
 
@@ -137,6 +146,7 @@ export type AdvisorMessage = {
 
 // Enhanced GameState
 export type GameState = {
+  currentTimelineSnapshotId?: string | null;
   turn: number;
   players: Record<string, Player>;
   provinces: Province[];

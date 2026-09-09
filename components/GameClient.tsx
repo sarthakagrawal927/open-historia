@@ -51,6 +51,15 @@ function GameClientInner({ initialGameId }: { initialGameId?: string } = {}) {
     setEvents: (val) => turn.setEvents(val),
     setRelations,
     addLog: (text, type) => turn.addLog(text, type),
+    canRewind: () => !turn.processingTurn && !diplomacy.processingChat && !advisor.processingAdvisor,
+    restoreMemory: (memory) => {
+      turn.setLogs(memory.logs);
+      turn.setStorySoFar(memory.storySoFar);
+      turn.setCompletedStepIds(memory.completedStepIds);
+      turn.setPendingOrders(memory.pendingOrders);
+      diplomacy.setChatThreads(memory.chatThreads);
+      advisor.setAdvisorMessages(memory.advisorHistory);
+    },
   });
 
   // ── Turn processing ──
@@ -61,6 +70,7 @@ function GameClientInner({ initialGameId }: { initialGameId?: string } = {}) {
     relations,
     setRelations,
     timelineSnapshots: timeline.timelineSnapshots,
+    captureContext: () => ({ chatThreads: diplomacy.chatThreads, advisorHistory: advisor.advisorMessages }),
     setTimelineSnapshots: timeline.setTimelineSnapshots,
   });
 
@@ -445,6 +455,7 @@ function GameClientInner({ initialGameId }: { initialGameId?: string } = {}) {
       {/* Timeline (bottom) — always visible during gameplay for empty-state guidance */}
       <Timeline
         snapshots={timeline.timelineSnapshots}
+        activeSnapshotId={gameState?.currentTimelineSnapshotId}
         currentYear={gameState?.turn || 0}
         onRewind={timeline.handleTimelineRewind}
         onBranch={timeline.handleTimelineBranch}

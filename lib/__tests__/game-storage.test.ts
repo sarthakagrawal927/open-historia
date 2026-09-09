@@ -146,14 +146,21 @@ describe('campaign state persistence', () => {
       relations: [{ nationA: 'Britain', nationB: 'France', type: 'friendly', treaties: ['Relief access'] }],
       chatThreads: [{ id: 'chat', type: 'bilateral', participants: ['Britain', 'France'], name: 'Relief', messages: [], unreadCount: 1 }],
       advisorHistory: [{ id: 'advice', role: 'advisor', content: 'Prepare relief ships.', timestamp: 1 }],
+      currentTimelineSnapshotId: 'turn',
       timeline: [{ id: 'turn', turnYear: 1940, timestamp: 1, description: 'Agreement', command: 'Negotiate', parentSnapshotId: null,
-        gameStateSlim: { turn: 1940, provinceOwners: {}, events: [], relations: [] } }],
+        gameStateSlim: { turn: 1940, provinceOwners: {}, events: [], relations: [] },
+        memory: { storySoFar: 'Relief agreement', logs: [{ id: 'log', type: 'info', text: 'Relief agreed' }], completedStepIds: ['relief'], pendingOrders: [], chatThreads: [], advisorHistory: [] } }],
       pendingOrders: ['Prepare ships.'], completedStepIds: ['relief'],
     };
     localSaveGame(state, makeGameConfig(), [], 'campaign');
     const save = localLoadGame('campaign');
     expect(save).not.toBeNull();
     expect(restoreSavedGameState(save!, [])).toEqual(state);
+    save!.gameState.timeline![0].memory = { storySoFar: "", logs: null } as never;
+    const recovered = restoreSavedGameState(save!, []);
+    expect(recovered.timeline![0].memory).toBeUndefined();
+    expect(recovered.timeline![0].id).toBe('turn');
+    expect(recovered.currentTimelineSnapshotId).toBe('turn');
   });
 
   it('does not overwrite unreadable saved campaigns', () => {

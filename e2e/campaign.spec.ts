@@ -90,3 +90,161 @@ test('save failure keeps the active campaign open', async ({ page }) => {
   await expect(page.getByRole('textbox', { name: /Enter orders/ })).toBeVisible();
   expect(page.url()).toBe(url);
 });
+
+test("rewind restores prompt memory across save and reload", async ({ page }) => {
+  const requests: Record<string, unknown>[] = [];
+  await page.route("**/api/turn", async route => {
+    requests.push(route.request().postDataJSON());
+    const turn = requests.length;
+    await route.fulfill({ json: { message: `Turn ${turn} narrative`, storySoFar: `Memory ${turn}`, updates: [{ type: "event", description: `Event ${turn}`, eventType: "diplomacy", year: 1939 + turn }, { type: "storyStep", stepId: `objective-${turn}`, message: `Objective ${turn}` }] } });
+  });
+  await startCampaign(page);
+  await page.getByRole("combobox").selectOption("1y");
+  for (let n = 1; n <= 2; n++) {
+    await page.getByRole("button", { name: /^advance$/i }).first().click();
+    await expect(page.getByText(`Turn ${n} narrative`, { exact: true })).toBeVisible();
+  }
+  await page.getByRole("button", { name: /^Turn 1940:/ }).click();
+  await page.getByRole("button", { name: "Rewind", exact: true }).click();
+  await page.getByRole("button", { name: /^save$/i }).click();
+  await expect(page.getByText("Game saved.", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: /Enter orders/ })).toBeVisible();
+  await page.getByRole("button", { name: /^advance$/i }).first().click();
+  await expect(page.getByText("Turn 3 narrative", { exact: true })).toBeVisible();
+  expect(requests[2].storySoFar).toBe("Memory 1");
+  expect(requests[2].completedStepIds).toEqual(["objective-1"]);
+  expect(JSON.stringify(requests[2].events)).not.toContain("Event 2");
+  expect(JSON.stringify(requests[2].history)).not.toContain("Turn 2 narrative");
+  await page.getByRole("button", { name: /^save$/i }).click();
+  const state = await page.evaluate(() => JSON.parse(localStorage.getItem("open_historia_saves") || "[]")[0].gameState);
+  expect(state.timeline.at(-1).parentSnapshotId).toBe(state.timeline[0].id);
+});
+
+
+test('older snapshots remain inspectable without inventing rewind memory', async ({ page }, testInfo) => {
+  await page.route('**/api/turn', route => route.fulfill({ json: { message: 'Historical fixture turn', updates: [{ type: 'event', description: 'Legacy event', eventType: 'diplomacy', year: 1940 }] } }));
+  await startCampaign(page);
+  await page.getByRole('combobox').selectOption('1y');
+  await page.getByRole('button', { name: /^advance$/i }).first().click();
+  await expect(page.getByText('Historical fixture turn', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /^save$/i }).click();
+  await expect(page.getByText('Game saved.', { exact: true })).toBeVisible();
+  await page.evaluate(() => {
+    const saves = JSON.parse(localStorage.getItem('open_historia_saves') || '[]');
+    delete saves[0].gameState.timeline[0].memory;
+    delete saves[0].gameState.currentTimelineSnapshotId;
+    localStorage.setItem('open_historia_saves', JSON.stringify(saves));
+  });
+  await page.reload();
+  await page.getByRole('button', { name: /^Turn 1940:/ }).click();
+  await expect(page.getByText('Older snapshot: historical memory was not saved. Replay inspection only.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Rewind', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Branch', exact: true })).toHaveCount(0);
+  const replay = page.getByText('Older snapshot: historical memory was not saved. Replay inspection only.').locator('..');
+  await replay.evaluate(async element => { await Promise.all(element.getAnimations().map(animation => animation.finished)); });
+  const bounds = await replay.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+  const heading = replay.getByText('Turn Replay', { exact: true });
+  expect(await heading.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    return element.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
+  })).toBe(true);
+  await page.screenshot({ path: `docs/qualification/rewind-2026-09-09/legacy-${testInfo.project.name}.png` });
+});
+
+
+test('rewind cannot replace state beneath an in-flight turn', async ({ page }) => {
+  let count = 0;
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/turn', async route => {
+    count++;
+    if (count === 3) await pending;
+    await route.fulfill({ json: { message: `Response ${count}`, storySoFar: `Memory ${count}`, updates: [{ type: 'event', description: `Event ${count}`, eventType: 'diplomacy', year: 1939 + count }] } });
+  });
+  await startCampaign(page);
+  await page.getByRole('combobox').selectOption('1y');
+  for (let n = 1; n <= 2; n++) {
+    await page.getByRole('button', { name: /^advance$/i }).first().click();
+    await expect(page.getByText(`Response ${n}`, { exact: true })).toBeVisible();
+  }
+  await page.getByRole('button', { name: /^advance$/i }).first().click();
+  await expect.poll(() => count).toBe(3);
+  await page.getByRole('button', { name: /^Turn 1940:/ }).click();
+  await page.getByRole('button', { name: 'Rewind', exact: true }).click();
+  await expect(page.getByText('Rewound to Year 1940.', { exact: true })).toHaveCount(0);
+  release();
+  await expect(page.getByText('Response 3', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /^save$/i }).click();
+  const save = await page.evaluate(() => JSON.parse(localStorage.getItem('open_historia_saves') || '[]')[0]);
+  expect(save.storySoFar).toBe('Memory 3');
+  expect(save.gameState.timeline.at(-1).parentSnapshotId).toBe(save.gameState.timeline[1].id);
+});
+
+
+test('explicit empty summary survives a later rewind and reload', async ({ page }) => {
+  const requests: Record<string, unknown>[] = [];
+  await page.route('**/api/turn', async route => {
+    requests.push(route.request().postDataJSON());
+    const n = requests.length;
+    await route.fulfill({ json: { message: `Empty-check response ${n}`, storySoFar: n === 2 ? '' : `Memory ${n}`, updates: [{ type: 'event', description: `Event ${n}`, eventType: 'diplomacy', year: 1939 + n }] } });
+  });
+  await startCampaign(page);
+  await page.getByRole('combobox').selectOption('1y');
+  for (let n = 1; n <= 3; n++) {
+    await page.getByRole('button', { name: /^advance$/i }).first().click();
+    await expect(page.getByText(`Empty-check response ${n}`, { exact: true })).toBeVisible();
+  }
+  expect(requests[2].storySoFar).toBe('');
+  await page.getByRole('button', { name: /^Turn 1941:/ }).click();
+  await page.getByRole('button', { name: 'Rewind', exact: true }).click();
+  await page.getByRole('button', { name: /^save$/i }).click();
+  await expect(page.getByText('Game saved.', { exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: /^advance$/i }).first().click();
+  await expect(page.getByText('Empty-check response 4', { exact: true })).toBeVisible();
+  expect(requests[3].storySoFar).toBe('');
+});
+
+test('rewind waits for a pending advisor response before restoring context', async ({ page }) => {
+  let turns = 0;
+  let started = false;
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/turn', async route => {
+    turns++;
+    await route.fulfill({ json: { message: `Advisor-check turn ${turns}`, updates: [{ type: 'event', description: `Event ${turns}`, eventType: 'diplomacy', year: 1939 + turns }] } });
+  });
+  await page.route('**/api/advisor', async route => {
+    started = true;
+    await pending;
+    await route.fulfill({ json: { advice: 'Future advice response' } });
+  });
+  await startCampaign(page);
+  await page.getByRole('combobox').selectOption('1y');
+  for (let n = 1; n <= 2; n++) {
+    await page.getByRole('button', { name: /^advance$/i }).first().click();
+    await expect(page.getByText(`Advisor-check turn ${n}`, { exact: true })).toBeVisible();
+  }
+  await page.getByRole('button', { name: 'Open Strategic Advisor' }).click();
+  await page.getByPlaceholder('Ask your advisor...').fill('What follows this future event?');
+  await page.getByRole('button', { name: 'Send message', exact: true }).click();
+  await expect.poll(() => started).toBe(true);
+  await page.getByRole('button', { name: 'Close advisor' }).click();
+  await page.getByRole('button', { name: /^Turn 1940:/ }).click();
+  await page.getByRole('button', { name: 'Rewind', exact: true }).click();
+  await expect(page.getByText('Rewound to Year 1940.', { exact: true })).toHaveCount(0);
+  release();
+  await page.getByRole('button', { name: 'Open Strategic Advisor' }).click();
+  await expect(page.getByText('Future advice response', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Close advisor' }).click();
+  await page.getByRole('button', { name: /^Turn 1940:/ }).click();
+  await page.getByRole('button', { name: 'Rewind', exact: true }).click();
+  await expect(page.getByText('Rewound to Year 1940.', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /^save$/i }).click();
+  const state = await page.evaluate(() => JSON.parse(localStorage.getItem('open_historia_saves') || '[]')[0].gameState);
+  expect(state.advisorHistory).toEqual([]);
+});

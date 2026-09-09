@@ -343,3 +343,7 @@ This section is maintained by the SaaS Maker Active-AI product/design loop so fu
 - No current Active-AI product/design task from the 2026-05-25/26 loop. Treat this as watch/status unless new evidence appears.
 - 2026-05-26 — Landing page now shows a concrete WWII sample timeline (sourced from `lib/presets.ts` `ww2-1939`) plus a "Start exploring" CTA in `components/PresetBrowser.tsx`. Cheap activation proof; no new task should re-add this.
 <!-- ACTIVE-AI-TASK-LOG:END -->
+
+## Campaign qualification
+
+This remains a held experiment. The [September 9 guest rewind receipt](docs/qualification/rewind-2026-09-09/README.md) verifies local save/reload and complete prompt-memory rewind for newly recorded snapshots. Older snapshots are inspection-only when historical memory is absent. Historical faction/map quality, authenticated saves and live release acceptance remain in [issue 27](https://github.com/sarthakagrawal927/open-historia/issues/27).

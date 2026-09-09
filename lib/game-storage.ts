@@ -1,3 +1,4 @@
+import { isTimelineMemory } from "./timeline-memory";
 import type { GameConfig, GameEvent, GameState, Province } from "./types";
 
 export interface LogEntry {
@@ -13,7 +14,7 @@ type ProvinceOwnerSnapshot = {
 
 type GameStateSnapshot = Pick<GameState,
   "turn" | "players" | "selectedProvinceId" | "theme" | "relations" |
-  "chatThreads" | "timeline" | "advisorHistory" | "pendingOrders" | "completedStepIds"
+  "chatThreads" | "timeline" | "advisorHistory" | "pendingOrders" | "completedStepIds" | "currentTimelineSnapshotId"
 > & { provinceOwners: ProvinceOwnerSnapshot[] };
 
 type PersistedGameState = GameStateSnapshot | GameState;
@@ -63,6 +64,7 @@ function migrateSave(save: SavedGame): SavedGame {
 }
 
 const toSnapshot = (gameState: GameState, completedStepIds?: string[]): GameStateSnapshot => ({
+  currentTimelineSnapshotId: gameState.currentTimelineSnapshotId,
   turn: gameState.turn,
   players: gameState.players,
   selectedProvinceId: gameState.selectedProvinceId,
@@ -118,6 +120,7 @@ export function restoreSavedGameState(savedGame: SavedGame, baseProvinces: Provi
   });
 
   return {
+    currentTimelineSnapshotId: persistedState.currentTimelineSnapshotId,
     turn: persistedState.turn,
     players: persistedState.players,
     provinces,
@@ -125,7 +128,9 @@ export function restoreSavedGameState(savedGame: SavedGame, baseProvinces: Provi
     theme: persistedState.theme,
     relations: persistedState.relations || [],
     chatThreads: persistedState.chatThreads || [],
-    timeline: persistedState.timeline || [],
+    timeline: (persistedState.timeline || []).map(snapshot => ({
+      ...snapshot, memory: isTimelineMemory(snapshot.memory) ? snapshot.memory : undefined,
+    })),
     advisorHistory: persistedState.advisorHistory || [],
     pendingOrders: persistedState.pendingOrders || [],
     completedStepIds: persistedState.completedStepIds || savedGame.completedStepIds || [],
